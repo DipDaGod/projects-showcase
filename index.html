@@ -377,7 +377,7 @@ h1{ display:none; } /* replaced by terminal title */
             <span class="prompt-path">~/projects</span>
             <span class="prompt-cmd">git ls-repos</span>
         </div>
-        <p id="subtitle">Loading repositories...</p>
+        <p id="subtitle">checking cache...</p>
 
         <div class="controls">
             <div class="filter-wrap">
@@ -410,8 +410,7 @@ const EXCLUDE = [
 
 const SORT_BY_STARS = false;
 
-const CACHE_KEY = "github_repo_cache";
-const LOCAL_CACHE_TTL = 5 * 60 * 1000; // 5 min — expires, but nothing auto-refetches when it does
+const CACHE_KEY = "github_repo_cache"; // whatever's here is what a reload shows — reloading never fetches
 
 const grid = document.getElementById("grid");
 const subtitle = document.getElementById("subtitle");
@@ -458,29 +457,11 @@ function setButtonState(state){
 }
 
 // -------------------------
-// Fetch repositories
+// Fetch repositories — every click hits the network for real. The worker
+// enforces the actual rate limit; if it 429s us, we just settle the button
+// back to normal with no error — nothing to fake client-side anymore.
 // -------------------------
-async function fetchRepos(force = false){
-
-    // Try cache first
-    if(!force){
-        const cache = JSON.parse(localStorage.getItem(CACHE_KEY));
-
-        if(cache && (Date.now() - cache.time) < LOCAL_CACHE_TTL){
-
-            allRepos = cache.data;
-
-            render(allRepos);
-
-            subtitle.textContent =
-                `${allRepos.length} public repositories · cached`;
-
-            status.textContent =
-                `last synced ${new Date(cache.time).toLocaleString()}`;
-
-            return;
-        }
-    }
+async function fetchRepos(){
 
     setButtonState("loading");
 
@@ -490,6 +471,11 @@ async function fetchRepos(force = false){
             `${WORKER_BASE}?project=showcase&path=repos`,
             { cache: "no-store" }
         );
+
+        if(response.status === 429){
+            setButtonState("success");
+            return;
+        }
 
         if(!response.ok){
             throw new Error(`Worker returned ${response.status} — check allowedOrigins / WORKER_BASE in logger.js`);
@@ -651,13 +637,31 @@ document.getElementById("filter").addEventListener("input", e => {
 // Refresh button
 // -------------------------
 refreshBtn.addEventListener("click", () => {
-    fetchRepos(true);
+    fetchRepos();
 });
 
 // -------------------------
-// Initial load
+// Initial load — reload does nothing. Just show whatever's cached, if
+// anything. Only the pull button ever talks to the network.
 // -------------------------
-fetchRepos();
+(function loadFromCache(){
+    const cache = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
+
+    if(cache && cache.data && cache.data.length){
+        allRepos = cache.data;
+        render(allRepos);
+
+        subtitle.textContent =
+            `${allRepos.length} public repositories · cached`;
+
+        status.textContent =
+            `last synced ${new Date(cache.time).toLocaleString()}`;
+    } else {
+        subtitle.textContent = "no cached data yet";
+        status.textContent = "hit pull to load repositories";
+        grid.innerHTML = `<div class="empty">no data yet — hit pull</div>`;
+    }
+})();
 
 </script>
 

@@ -163,6 +163,9 @@ h1{ display:none; } /* replaced by terminal title */
 #filter::placeholder{ color:var(--muted-dim); }
 
 #refresh{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
     padding:10px 16px;
     border:1px solid var(--border);
     border-radius:7px;
@@ -172,17 +175,50 @@ h1{ display:none; } /* replaced by terminal title */
     font-family:var(--mono);
     font-weight:500;
     font-size:.85rem;
-    transition:.15s;
+    transition:border-color .15s, background .15s, color .15s;
 }
 
-#refresh:hover{
+#refresh:hover:not(:disabled){
     border-color:var(--green);
     background:rgba(63,185,80,.08);
 }
 
 #refresh:disabled{
-    opacity:.5;
     cursor:not-allowed;
+}
+
+#refresh .icon{
+    display:inline-block;
+    line-height:1;
+}
+
+#refresh.loading{
+    color:var(--muted);
+    border-color:var(--border);
+}
+
+#refresh.loading .icon{
+    animation:spin .7s linear infinite;
+}
+
+#refresh.success{
+    border-color:var(--green);
+    background:rgba(63,185,80,.14);
+    color:var(--green);
+}
+
+#refresh.error{
+    border-color:var(--red);
+    background:rgba(248,81,73,.12);
+    color:var(--red);
+}
+
+@keyframes spin{
+    to{ transform:rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce){
+    #refresh.loading .icon{ animation:none; }
 }
 
 /* ---------- grid ---------- */
@@ -348,7 +384,7 @@ h1{ display:none; } /* replaced by terminal title */
                 <span class="filter-prefix">grep -i</span>
                 <input id="filter" placeholder="filter repos...">
             </div>
-            <button id="refresh">⟳ pull</button>
+            <button id="refresh"><span class="icon">⟳</span><span class="label">pull</span></button>
         </div>
     </div>
 </div>
@@ -375,7 +411,7 @@ const EXCLUDE = [
 const SORT_BY_STARS = false;
 
 const CACHE_KEY = "github_repo_cache";
-const CACHE_TIME = 10 * 60 * 1000; // 10 minutes
+const LOCAL_CACHE_TTL = 5 * 60 * 1000; // 5 min — expires, but nothing auto-refetches when it does
 
 const grid = document.getElementById("grid");
 const subtitle = document.getElementById("subtitle");
@@ -400,6 +436,28 @@ function langColor(lang){
 }
 
 // -------------------------
+// Refresh button state
+// -------------------------
+function setButtonState(state){
+    refreshBtn.classList.remove("loading", "success", "error");
+
+    if(state === "loading"){
+        refreshBtn.disabled = true;
+        refreshBtn.classList.add("loading");
+        refreshBtn.querySelector(".label").textContent = "pulling...";
+        return;
+    }
+
+    refreshBtn.disabled = false;
+    refreshBtn.querySelector(".label").textContent = "pull";
+
+    if(state === "success" || state === "error"){
+        refreshBtn.classList.add(state);
+        setTimeout(() => refreshBtn.classList.remove(state), 1000);
+    }
+}
+
+// -------------------------
 // Fetch repositories
 // -------------------------
 async function fetchRepos(force = false){
@@ -408,7 +466,7 @@ async function fetchRepos(force = false){
     if(!force){
         const cache = JSON.parse(localStorage.getItem(CACHE_KEY));
 
-        if(cache && (Date.now() - cache.time) < CACHE_TIME){
+        if(cache && (Date.now() - cache.time) < LOCAL_CACHE_TTL){
 
             allRepos = cache.data;
 
@@ -424,13 +482,13 @@ async function fetchRepos(force = false){
         }
     }
 
-    refreshBtn.disabled = true;
-    refreshBtn.textContent = "pulling...";
+    setButtonState("loading");
 
     try{
 
         const response = await fetch(
-            `${WORKER_BASE}?project=showcase&path=repos`
+            `${WORKER_BASE}?project=showcase&path=repos`,
+            { cache: "no-store" }
         );
 
         if(!response.ok){
@@ -466,6 +524,8 @@ async function fetchRepos(force = false){
         status.textContent =
             `last synced ${new Date().toLocaleString()}`;
 
+        setButtonState("success");
+
     }
     catch(err){
 
@@ -481,10 +541,10 @@ async function fetchRepos(force = false){
                 <span>${escapeHtml(err.message)}</span>
             </div>
         `;
-    }
 
-    refreshBtn.disabled = false;
-    refreshBtn.textContent = "⟳ pull";
+        setButtonState("error");
+        return;
+    }
 }
 
 // -------------------------
@@ -598,13 +658,6 @@ refreshBtn.addEventListener("click", () => {
 // Initial load
 // -------------------------
 fetchRepos();
-
-// -------------------------
-// Auto refresh every 10 mins
-// -------------------------
-setInterval(() => {
-    fetchRepos(true);
-}, CACHE_TIME);
 
 </script>
 

@@ -363,7 +363,7 @@ const USERNAME = "dipdagod";
 // Cloudflare Worker that KV-caches the GitHub API response (refreshes once
 // a day upstream, no matter how often "pull" is clicked here).
 // Replace with your actual worker URL, e.g. https://logger.yourname.workers.dev
-const WORKER_BASE = "https://logger.YOUR-SUBDOMAIN.workers.dev";
+const WORKER_BASE = "https://logger.dhairyaplayz97.workers.dev";
 
 const EXCLUDE = [
     "dipdagod.github.io",
@@ -434,7 +434,7 @@ async function fetchRepos(force = false){
         );
 
         if(!response.ok){
-            throw new Error(`GitHub API Error ${response.status}`);
+            throw new Error(`Worker returned ${response.status} — check allowedOrigins / WORKER_BASE in logger.js`);
         }
 
         let repos = await response.json();
@@ -471,7 +471,7 @@ async function fetchRepos(force = false){
 
         console.error(err);
 
-        subtitle.textContent = "fatal: couldn't reach api.github.com";
+        subtitle.textContent = "fatal: repo fetch failed";
 
         status.textContent = err.message;
 

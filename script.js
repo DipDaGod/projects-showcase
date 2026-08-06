@@ -23,8 +23,13 @@ const refreshBtn = document.getElementById("refresh");
 const uptimeEl = document.getElementById("uptime");
 const helpPanel = document.getElementById("help-panel");
 const helpToggle = document.getElementById("help-toggle");
+const statsBar = document.getElementById("stats-bar");
+const langChips = document.getElementById("lang-chips");
+const sortSelect = document.getElementById("sort");
 
 let allRepos = [];
+let activeLanguage = null;
+let currentSort = "updated";
 
 const PAGE_LOAD_TIME = Date.now();
 
@@ -127,6 +132,79 @@ function langColor(lang){
 }
 
 // -------------------------
+// Stats bar — computed off the full repo set, not the filtered view
+// -------------------------
+function renderStatsBar(repos){
+    const totalStars = repos.reduce((sum, r) => sum + r.stargazers_count, 0);
+
+    const langCounts = {};
+    repos.forEach(r => {
+        if(r.language) langCounts[r.language] = (langCounts[r.language] || 0) + 1;
+    });
+
+    const langEntries = Object.entries(langCounts).sort((a, b) => b[1] - a[1]);
+    const topLang = langEntries[0]?.[0] ?? "—";
+
+    statsBar.innerHTML = `
+        <div class="stat-box">
+            <span class="stat-value">${repos.length}</span>
+            <span class="stat-label">repositories</span>
+        </div>
+        <div class="stat-box">
+            <span class="stat-value accent">★ ${totalStars}</span>
+            <span class="stat-label">total stars</span>
+        </div>
+        <div class="stat-box">
+            <span class="stat-value">${langEntries.length}</span>
+            <span class="stat-label">languages</span>
+        </div>
+        <div class="stat-box">
+            <span class="stat-value" style="color:${langColor(topLang)}">${escapeHtml(topLang)}</span>
+            <span class="stat-label">top language</span>
+        </div>
+    `;
+}
+
+// -------------------------
+// Language filter chips
+// -------------------------
+function renderLangChips(repos){
+    const langCounts = {};
+    repos.forEach(r => {
+        if(r.language) langCounts[r.language] = (langCounts[r.language] || 0) + 1;
+    });
+
+    const langs = Object.entries(langCounts).sort((a, b) => b[1] - a[1]);
+
+    if(activeLanguage && !langCounts[activeLanguage]){
+        activeLanguage = null; // previously active language no longer present (e.g. after a fresh pull)
+    }
+
+    const allChip = `
+        <button class="chip ${activeLanguage === null ? "active" : ""}" data-lang="">
+            all <span style="opacity:.6">${repos.length}</span>
+        </button>
+    `;
+
+    const langChipsHtml = langs.map(([lang, count]) => `
+        <button class="chip ${activeLanguage === lang ? "active" : ""}" data-lang="${escapeHtml(lang)}">
+            <span class="lang-dot" style="background:${langColor(lang)}"></span>
+            ${escapeHtml(lang)} <span style="opacity:.6">${count}</span>
+        </button>
+    `).join("");
+
+    langChips.innerHTML = allChip + langChipsHtml;
+
+    langChips.querySelectorAll(".chip").forEach(chip => {
+        chip.addEventListener("click", () => {
+            activeLanguage = chip.dataset.lang || null;
+            renderLangChips(allRepos); // refresh active states
+            applyFilter();
+        });
+    });
+}
+
+// -------------------------
 // Refresh button state
 // -------------------------
 function setButtonState(state){
@@ -194,7 +272,9 @@ async function fetchRepos(){
         allRepos = repos;
 
         grid.classList.remove("refreshing");
-        render(allRepos, filterInput.value.trim());
+        renderStatsBar(allRepos);
+        renderLangChips(allRepos);
+        applyFilter();
 
         localStorage.setItem(
             CACHE_KEY,
@@ -264,55 +344,67 @@ function render(repos, query = ""){
     grid.innerHTML = repos.map((repo, i) => `
         <div class="card" style="--card-delay:${Math.min(i, 10) * 30}ms">
 
-            <div class="name-row">
-                <span class="branch-icon">⌥</span>
-                <a
-                    class="name"
-                    href="${repo.html_url}"
-                    target="_blank"
-                >
-                    ${highlightMatch(repo.name, query)}
-                </a>
-            </div>
+            <img
+                class="card-thumb"
+                src="https://opengraph.githubassets.com/1/${USERNAME}/${repo.name}"
+                alt=""
+                loading="lazy"
+                onerror="this.remove()"
+            >
 
-            <div class="desc">
-                ${repo.description
-                    ? escapeHtml(repo.description)
-                    : "No description."}
-            </div>
+            <div class="card-body">
 
-            ${
-                repo.homepage
-                    ? `
+                <div class="name-row">
+                    <span class="branch-icon">⌥</span>
                     <a
-                        class="site-link"
-                        href="${repo.homepage}"
+                        class="name"
+                        href="${repo.html_url}"
                         target="_blank"
                     >
-                        🔗 visit site
+                        ${highlightMatch(repo.name, query)}
                     </a>
-                    `
-                    : ""
-            }
+                </div>
 
-            <div class="meta">
+                <div class="desc">
+                    ${repo.description
+                        ? escapeHtml(repo.description)
+                        : "No description."}
+                </div>
 
                 ${
-                    repo.language
+                    repo.homepage
                         ? `
-                        <span>
-                            <span class="lang-dot" style="background:${langColor(repo.language)}"></span>
-                            ${escapeHtml(repo.language)}
-                        </span>
+                        <a
+                            class="site-link"
+                            href="${repo.homepage}"
+                            target="_blank"
+                        >
+                            🔗 visit site
+                        </a>
                         `
                         : ""
                 }
 
-                <span>★ ${repo.stargazers_count}</span>
+                <div class="meta">
 
-                <span>
-                    ${new Date(repo.pushed_at).toLocaleDateString()}
-                </span>
+                    ${
+                        repo.language
+                            ? `
+                            <span>
+                                <span class="lang-dot" style="background:${langColor(repo.language)}"></span>
+                                ${escapeHtml(repo.language)}
+                            </span>
+                            `
+                            : ""
+                    }
+
+                    <span>★ ${repo.stargazers_count}</span>
+
+                    <span>
+                        ${new Date(repo.pushed_at).toLocaleDateString()}
+                    </span>
+
+                </div>
 
             </div>
 
@@ -358,6 +450,32 @@ const filterClear = document.getElementById("filter-clear");
 
 let filterDebounce;
 
+// -------------------------
+// Sort + filter pipeline
+// -------------------------
+function getVisibleRepos(){
+    let repos = [...allRepos];
+
+    if(currentSort === "stars"){
+        repos.sort((a, b) => b.stargazers_count - a.stargazers_count);
+    } else if(currentSort === "name"){
+        repos.sort((a, b) => a.name.localeCompare(b.name));
+    } else {
+        repos.sort((a, b) => new Date(b.pushed_at) - new Date(a.pushed_at));
+    }
+
+    if(activeLanguage){
+        repos = repos.filter(r => r.language === activeLanguage);
+    }
+
+    const q = filterInput.value.trim().toLowerCase();
+    if(q){
+        repos = repos.filter(r => r.name.toLowerCase().includes(q));
+    }
+
+    return repos;
+}
+
 function applyFilter(){
     const raw = filterInput.value.trim();
     const q = raw.toLowerCase();
@@ -376,13 +494,13 @@ function applyFilter(){
         return;
     }
 
-    render(
-        allRepos.filter(repo =>
-            repo.name.toLowerCase().includes(q)
-        ),
-        raw
-    );
+    render(getVisibleRepos(), raw);
 }
+
+sortSelect.addEventListener("change", () => {
+    currentSort = sortSelect.value;
+    applyFilter();
+});
 
 filterInput.addEventListener("input", () => {
     clearTimeout(filterDebounce);
@@ -438,7 +556,9 @@ refreshBtn.addEventListener("click", () => {
 
     if(cache && cache.data && cache.data.length){
         allRepos = cache.data;
-        render(allRepos);
+        renderStatsBar(allRepos);
+        renderLangChips(allRepos);
+        applyFilter();
 
         subtitle.textContent =
             `${allRepos.length} public repositories · cached`;
@@ -448,6 +568,8 @@ refreshBtn.addEventListener("click", () => {
     } else {
         subtitle.textContent = "no cached data yet";
         status.textContent = "hit pull to load repositories";
+        statsBar.innerHTML = "";
+        langChips.innerHTML = "";
         grid.innerHTML = `
             <div class="empty">
                 <span>no data yet</span>

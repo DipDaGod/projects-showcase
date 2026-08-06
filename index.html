@@ -42,10 +42,18 @@
                 <input id="filter" placeholder="filter repos... ( / )">
                 <button id="filter-clear" aria-label="Clear filter" type="button">✕</button>
             </div>
+            <select id="sort" aria-label="Sort repositories">
+                <option value="updated">recently updated</option>
+                <option value="stars">most stars</option>
+                <option value="name">name</option>
+            </select>
             <button id="refresh"><span class="icon">⟳</span><span class="label">pull</span></button>
         </div>
     </div>
 </div>
+
+<div id="stats-bar"></div>
+<div id="lang-chips"></div>
 
 <div id="grid"></div>
 

@@ -2,6 +2,7 @@ const USERNAME = "dipdagod";
 
 // Cloudflare Worker that KV-caches the GitHub API response (refreshes once
 // a day upstream, no matter how often "pull" is clicked here).
+// Replace with your actual worker URL, e.g. https://logger.yourname.workers.dev
 const WORKER_BASE = "https://logger.dhairyaplayz97.workers.dev";
 
 const EXCLUDE = [
@@ -68,6 +69,12 @@ async function fetchRepos(){
 
     setButtonState("loading");
 
+    if(allRepos.length === 0){
+        renderSkeleton();
+    } else {
+        grid.classList.add("refreshing");
+    }
+
     try{
 
         const response = await fetch(
@@ -76,6 +83,7 @@ async function fetchRepos(){
         );
 
         if(response.status === 429){
+            grid.classList.remove("refreshing");
             setButtonState("success");
             return;
         }
@@ -97,7 +105,8 @@ async function fetchRepos(){
 
         allRepos = repos;
 
-        render(allRepos);
+        grid.classList.remove("refreshing");
+        render(allRepos, filterInput.value.trim());
 
         localStorage.setItem(
             CACHE_KEY,
@@ -120,6 +129,8 @@ async function fetchRepos(){
 
         console.error(err);
 
+        grid.classList.remove("refreshing");
+
         subtitle.textContent = "fatal: repo fetch failed";
 
         status.textContent = err.message;
@@ -137,17 +148,33 @@ async function fetchRepos(){
 }
 
 // -------------------------
+// Skeleton placeholders (shown while loading with no existing data yet)
+// -------------------------
+function renderSkeleton(count = 6){
+    grid.innerHTML = Array.from({ length: count }).map(() => `
+        <div class="skeleton">
+            <div class="skel-line" style="width:55%;height:14px;"></div>
+            <div class="skel-line" style="width:90%;"></div>
+            <div class="skel-line" style="width:70%;"></div>
+            <div class="skel-line" style="width:40%;margin-top:auto;"></div>
+        </div>
+    `).join("");
+}
+
+// -------------------------
 // Render
 // -------------------------
-function render(repos){
+function render(repos, query = ""){
 
     if(repos.length === 0){
-        grid.innerHTML = `<div class="empty">no matches</div>`;
+        grid.innerHTML = query
+            ? `<div class="empty">no matches for “${escapeHtml(query)}”</div>`
+            : `<div class="empty">no repositories to show</div>`;
         return;
     }
 
-    grid.innerHTML = repos.map(repo => `
-        <div class="card">
+    grid.innerHTML = repos.map((repo, i) => `
+        <div class="card" style="--card-delay:${Math.min(i, 10) * 30}ms">
 
             <div class="name-row">
                 <span class="branch-icon">⌥</span>
@@ -156,7 +183,7 @@ function render(repos){
                     href="${repo.html_url}"
                     target="_blank"
                 >
-                    ${escapeHtml(repo.name)}
+                    ${highlightMatch(repo.name, query)}
                 </a>
             </div>
 
@@ -221,19 +248,66 @@ function escapeHtml(str){
 
 }
 
+// Wraps the matched substring of a repo name in <mark>, case-insensitively.
+function highlightMatch(name, query){
+    if(!query) return escapeHtml(name);
+
+    const idx = name.toLowerCase().indexOf(query.toLowerCase());
+    if(idx === -1) return escapeHtml(name);
+
+    const before = escapeHtml(name.slice(0, idx));
+    const match = escapeHtml(name.slice(idx, idx + query.length));
+    const after = escapeHtml(name.slice(idx + query.length));
+
+    return `${before}<mark>${match}</mark>${after}`;
+}
+
 // -------------------------
 // Filter
 // -------------------------
-document.getElementById("filter").addEventListener("input", e => {
+const filterInput = document.getElementById("filter");
+const filterClear = document.getElementById("filter-clear");
 
-    const q = e.target.value.toLowerCase();
+let filterDebounce;
+
+function applyFilter(){
+    const q = filterInput.value.trim().toLowerCase();
+
+    filterClear.classList.toggle("visible", filterInput.value.length > 0);
 
     render(
         allRepos.filter(repo =>
             repo.name.toLowerCase().includes(q)
-        )
+        ),
+        filterInput.value.trim()
     );
+}
 
+filterInput.addEventListener("input", () => {
+    clearTimeout(filterDebounce);
+    filterDebounce = setTimeout(applyFilter, 120);
+});
+
+filterClear.addEventListener("click", () => {
+    filterInput.value = "";
+    applyFilter();
+    filterInput.focus();
+});
+
+document.addEventListener("keydown", e => {
+    const tag = document.activeElement.tagName;
+    const isTyping = tag === "INPUT" || tag === "TEXTAREA";
+
+    if(e.key === "/" && !isTyping){
+        e.preventDefault();
+        filterInput.focus();
+    }
+
+    if(e.key === "Escape" && document.activeElement === filterInput){
+        filterInput.value = "";
+        applyFilter();
+        filterInput.blur();
+    }
 });
 
 // -------------------------
@@ -262,6 +336,13 @@ refreshBtn.addEventListener("click", () => {
     } else {
         subtitle.textContent = "no cached data yet";
         status.textContent = "hit pull to load repositories";
-        grid.innerHTML = `<div class="empty">no data yet — hit pull</div>`;
+        grid.innerHTML = `
+            <div class="empty">
+                <span>no data yet</span>
+                <button class="cta-btn" id="empty-pull">⟳ pull now</button>
+            </div>
+        `;
+        document.getElementById("empty-pull").addEventListener("click", fetchRepos);
     }
 })();
+

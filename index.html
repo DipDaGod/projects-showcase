@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
 <link rel="stylesheet" href="style.css">
 </head>
 
@@ -34,7 +35,8 @@
         <div class="controls">
             <div class="filter-wrap">
                 <span class="filter-prefix">grep -i</span>
-                <input id="filter" placeholder="filter repos...">
+                <input id="filter" placeholder="filter repos... ( / )">
+                <button id="filter-clear" aria-label="Clear filter" type="button">✕</button>
             </div>
             <button id="refresh"><span class="icon">⟳</span><span class="label">pull</span></button>
         </div>

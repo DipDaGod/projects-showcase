@@ -20,13 +20,96 @@ const grid = document.getElementById("grid");
 const subtitle = document.getElementById("subtitle");
 const status = document.getElementById("status");
 const refreshBtn = document.getElementById("refresh");
-const statsBar = document.getElementById("stats-bar");
-const langChips = document.getElementById("lang-chips");
-const sortSelect = document.getElementById("sort");
+const uptimeEl = document.getElementById("uptime");
+const helpPanel = document.getElementById("help-panel");
+const helpToggle = document.getElementById("help-toggle");
 
 let allRepos = [];
-let activeLanguage = null;
-let currentSort = "updated";
+
+const PAGE_LOAD_TIME = Date.now();
+
+// -------------------------
+// Boot sequence — purely cosmetic, skippable, respects reduced motion
+// -------------------------
+const BOOT_LINES = [
+    "[    0.000000] dipdagod-kernel: booting projects-showcase",
+    "[    0.041233] mounting ~/projects (ro)",
+    "[    0.089510] fonts: jetbrains-mono, inter ... ok",
+    "[    0.114882] checking local cache ...",
+    "[    0.152007] init ui ... ok",
+];
+
+function runBootSequence(){
+    const boot = document.getElementById("boot");
+
+    if(window.matchMedia("(prefers-reduced-motion: reduce)").matches){
+        boot.remove();
+        return;
+    }
+
+    let i = 0;
+    const hint = boot.querySelector(".boot-hint");
+
+    function addLine(){
+        if(i >= BOOT_LINES.length){
+            const ready = document.createElement("div");
+            ready.className = "boot-line boot-ready";
+            ready.textContent = "ready_";
+            boot.insertBefore(ready, hint);
+            setTimeout(finish, 260);
+            return;
+        }
+
+        const line = document.createElement("div");
+        line.className = "boot-line";
+        line.textContent = BOOT_LINES[i];
+        boot.insertBefore(line, hint);
+        i++;
+        setTimeout(addLine, 90);
+    }
+
+    function finish(){
+        boot.classList.add("boot-done");
+        boot.removeEventListener("click", skip);
+        document.removeEventListener("keydown", skip);
+        setTimeout(() => boot.remove(), 320);
+    }
+
+    function skip(){
+        boot.removeEventListener("click", skip);
+        document.removeEventListener("keydown", skip);
+        finish();
+    }
+
+    boot.addEventListener("click", skip);
+    document.addEventListener("keydown", skip);
+
+    addLine();
+}
+
+runBootSequence();
+
+// -------------------------
+// Live uptime ticker — genuine time-since-page-load, not decorative fluff
+// -------------------------
+function tickUptime(){
+    const secs = Math.floor((Date.now() - PAGE_LOAD_TIME) / 1000);
+    const m = String(Math.floor(secs / 60)).padStart(2, "0");
+    const s = String(secs % 60).padStart(2, "0");
+    uptimeEl.textContent = `uptime ${m}:${s}`;
+}
+
+tickUptime();
+setInterval(tickUptime, 1000);
+
+// -------------------------
+// Help panel ("?" toggles, matches the man-page vibe)
+// -------------------------
+function setHelpVisible(visible){
+    helpPanel.hidden = !visible;
+}
+
+helpToggle.addEventListener("click", () => setHelpVisible(helpPanel.hidden));
 
 // -------------------------
 // Language colors (subset of GitHub's linguist palette)
@@ -41,79 +124,6 @@ const LANG_COLORS = {
 
 function langColor(lang){
     return LANG_COLORS[lang] || "#8b949e";
-}
-
-// -------------------------
-// Stats bar — computed off the full repo set, not the filtered view
-// -------------------------
-function renderStatsBar(repos){
-    const totalStars = repos.reduce((sum, r) => sum + r.stargazers_count, 0);
-
-    const langCounts = {};
-    repos.forEach(r => {
-        if(r.language) langCounts[r.language] = (langCounts[r.language] || 0) + 1;
-    });
-
-    const langEntries = Object.entries(langCounts).sort((a, b) => b[1] - a[1]);
-    const topLang = langEntries[0]?.[0] ?? "—";
-
-    statsBar.innerHTML = `
-        <div class="stat-box">
-            <span class="stat-value">${repos.length}</span>
-            <span class="stat-label">repositories</span>
-        </div>
-        <div class="stat-box">
-            <span class="stat-value accent">★ ${totalStars}</span>
-            <span class="stat-label">total stars</span>
-        </div>
-        <div class="stat-box">
-            <span class="stat-value">${langEntries.length}</span>
-            <span class="stat-label">languages</span>
-        </div>
-        <div class="stat-box">
-            <span class="stat-value" style="color:${langColor(topLang)}">${escapeHtml(topLang)}</span>
-            <span class="stat-label">top language</span>
-        </div>
-    `;
-}
-
-// -------------------------
-// Language filter chips
-// -------------------------
-function renderLangChips(repos){
-    const langCounts = {};
-    repos.forEach(r => {
-        if(r.language) langCounts[r.language] = (langCounts[r.language] || 0) + 1;
-    });
-
-    const langs = Object.entries(langCounts).sort((a, b) => b[1] - a[1]);
-
-    if(activeLanguage && !langCounts[activeLanguage]){
-        activeLanguage = null; // previously active language no longer present (e.g. after a fresh pull)
-    }
-
-    const allChip = `
-        <button class="chip ${activeLanguage === null ? "active" : ""}" data-lang="">
-            all <span style="opacity:.6">${repos.length}</span>
-        </button>
-    `;
-
-    const langChipsHtml = langs.map(([lang, count]) => `
-        <button class="chip ${activeLanguage === lang ? "active" : ""}" data-lang="${escapeHtml(lang)}">
-            <span class="lang-dot" style="background:${langColor(lang)}"></span>
-            ${escapeHtml(lang)} <span style="opacity:.6">${count}</span>
-        </button>
-    `).join("");
-
-    langChips.innerHTML = allChip + langChipsHtml;
-
-    langChips.querySelectorAll(".chip").forEach(chip => {
-        chip.addEventListener("click", () => {
-            activeLanguage = chip.dataset.lang || null;
-            renderLangChips(allRepos); // refresh active states
-            applyFilter();
-        });
-    });
 }
 
 // -------------------------
@@ -184,9 +194,7 @@ async function fetchRepos(){
         allRepos = repos;
 
         grid.classList.remove("refreshing");
-        renderStatsBar(allRepos);
-        renderLangChips(allRepos);
-        applyFilter();
+        render(allRepos, filterInput.value.trim());
 
         localStorage.setItem(
             CACHE_KEY,
@@ -256,67 +264,55 @@ function render(repos, query = ""){
     grid.innerHTML = repos.map((repo, i) => `
         <div class="card" style="--card-delay:${Math.min(i, 10) * 30}ms">
 
-            <img
-                class="card-thumb"
-                src="https://opengraph.githubassets.com/1/${USERNAME}/${repo.name}"
-                alt=""
-                loading="lazy"
-                onerror="this.remove()"
-            >
+            <div class="name-row">
+                <span class="branch-icon">⌥</span>
+                <a
+                    class="name"
+                    href="${repo.html_url}"
+                    target="_blank"
+                >
+                    ${highlightMatch(repo.name, query)}
+                </a>
+            </div>
 
-            <div class="card-body">
+            <div class="desc">
+                ${repo.description
+                    ? escapeHtml(repo.description)
+                    : "No description."}
+            </div>
 
-                <div class="name-row">
-                    <span class="branch-icon">⌥</span>
+            ${
+                repo.homepage
+                    ? `
                     <a
-                        class="name"
-                        href="${repo.html_url}"
+                        class="site-link"
+                        href="${repo.homepage}"
                         target="_blank"
                     >
-                        ${highlightMatch(repo.name, query)}
+                        🔗 visit site
                     </a>
-                </div>
+                    `
+                    : ""
+            }
 
-                <div class="desc">
-                    ${repo.description
-                        ? escapeHtml(repo.description)
-                        : "No description."}
-                </div>
+            <div class="meta">
 
                 ${
-                    repo.homepage
+                    repo.language
                         ? `
-                        <a
-                            class="site-link"
-                            href="${repo.homepage}"
-                            target="_blank"
-                        >
-                            🔗 visit site
-                        </a>
+                        <span>
+                            <span class="lang-dot" style="background:${langColor(repo.language)}"></span>
+                            ${escapeHtml(repo.language)}
+                        </span>
                         `
                         : ""
                 }
 
-                <div class="meta">
+                <span>★ ${repo.stargazers_count}</span>
 
-                    ${
-                        repo.language
-                            ? `
-                            <span>
-                                <span class="lang-dot" style="background:${langColor(repo.language)}"></span>
-                                ${escapeHtml(repo.language)}
-                            </span>
-                            `
-                            : ""
-                    }
-
-                    <span>★ ${repo.stargazers_count}</span>
-
-                    <span>
-                        ${new Date(repo.pushed_at).toLocaleDateString()}
-                    </span>
-
-                </div>
+                <span>
+                    ${new Date(repo.pushed_at).toLocaleDateString()}
+                </span>
 
             </div>
 
@@ -362,41 +358,31 @@ const filterClear = document.getElementById("filter-clear");
 
 let filterDebounce;
 
-// -------------------------
-// Sort + filter pipeline
-// -------------------------
-function getVisibleRepos(){
-    let repos = [...allRepos];
-
-    if(currentSort === "stars"){
-        repos.sort((a, b) => b.stargazers_count - a.stargazers_count);
-    } else if(currentSort === "name"){
-        repos.sort((a, b) => a.name.localeCompare(b.name));
-    } else {
-        repos.sort((a, b) => new Date(b.pushed_at) - new Date(a.pushed_at));
-    }
-
-    if(activeLanguage){
-        repos = repos.filter(r => r.language === activeLanguage);
-    }
-
-    const q = filterInput.value.trim().toLowerCase();
-    if(q){
-        repos = repos.filter(r => r.name.toLowerCase().includes(q));
-    }
-
-    return repos;
-}
-
 function applyFilter(){
-    filterClear.classList.toggle("visible", filterInput.value.length > 0);
-    render(getVisibleRepos(), filterInput.value.trim());
-}
+    const raw = filterInput.value.trim();
+    const q = raw.toLowerCase();
 
-sortSelect.addEventListener("change", () => {
-    currentSort = sortSelect.value;
-    applyFilter();
-});
+    filterClear.classList.toggle("visible", filterInput.value.length > 0);
+
+    if(q === "sudo"){
+        grid.innerHTML = `
+            <div class="empty">
+                Permission denied
+                <span style="font-size:.72rem;opacity:.55;">
+                    (dipdagod is not in the sudoers file. this incident will be reported.)
+                </span>
+            </div>
+        `;
+        return;
+    }
+
+    render(
+        allRepos.filter(repo =>
+            repo.name.toLowerCase().includes(q)
+        ),
+        raw
+    );
+}
 
 filterInput.addEventListener("input", () => {
     clearTimeout(filterDebounce);
@@ -418,10 +404,21 @@ document.addEventListener("keydown", e => {
         filterInput.focus();
     }
 
-    if(e.key === "Escape" && document.activeElement === filterInput){
-        filterInput.value = "";
-        applyFilter();
-        filterInput.blur();
+    if(e.key === "?" && !isTyping){
+        setHelpVisible(helpPanel.hidden);
+    }
+
+    if(e.key === "Escape"){
+        if(!helpPanel.hidden){
+            setHelpVisible(false);
+            return;
+        }
+
+        if(document.activeElement === filterInput){
+            filterInput.value = "";
+            applyFilter();
+            filterInput.blur();
+        }
     }
 });
 
@@ -441,9 +438,7 @@ refreshBtn.addEventListener("click", () => {
 
     if(cache && cache.data && cache.data.length){
         allRepos = cache.data;
-        renderStatsBar(allRepos);
-        renderLangChips(allRepos);
-        applyFilter();
+        render(allRepos);
 
         subtitle.textContent =
             `${allRepos.length} public repositories · cached`;
@@ -453,8 +448,6 @@ refreshBtn.addEventListener("click", () => {
     } else {
         subtitle.textContent = "no cached data yet";
         status.textContent = "hit pull to load repositories";
-        statsBar.innerHTML = "";
-        langChips.innerHTML = "";
         grid.innerHTML = `
             <div class="empty">
                 <span>no data yet</span>
@@ -464,4 +457,3 @@ refreshBtn.addEventListener("click", () => {
         document.getElementById("empty-pull").addEventListener("click", fetchRepos);
     }
 })();
-

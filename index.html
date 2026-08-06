@@ -14,6 +14,10 @@
 
 <body>
 
+<div id="boot" aria-hidden="true">
+    <div class="boot-hint">press any key to skip</div>
+</div>
+
 <h1>My Projects</h1>
 
 <div class="term">
@@ -38,22 +42,26 @@
                 <input id="filter" placeholder="filter repos... ( / )">
                 <button id="filter-clear" aria-label="Clear filter" type="button">✕</button>
             </div>
-            <select id="sort" aria-label="Sort repositories">
-                <option value="updated">recently updated</option>
-                <option value="stars">most stars</option>
-                <option value="name">name</option>
-            </select>
             <button id="refresh"><span class="icon">⟳</span><span class="label">pull</span></button>
         </div>
     </div>
 </div>
 
-<div id="stats-bar"></div>
-<div id="lang-chips"></div>
-
 <div id="grid"></div>
 
-<div id="status"></div>
+<div id="status-row">
+    <div id="status"></div>
+    <div id="uptime"></div>
+    <button id="help-toggle" type="button" aria-label="Keyboard shortcuts">? help</button>
+</div>
+
+<div id="help-panel" hidden>
+    <div class="help-title">$ man shortcuts</div>
+    <div class="help-row"><kbd>/</kbd><span>focus filter</span></div>
+    <div class="help-row"><kbd>Esc</kbd><span>clear filter / close this</span></div>
+    <div class="help-row"><kbd>?</kbd><span>toggle this panel</span></div>
+    <div class="help-row"><kbd>↻ pull</kbd><span>fetch latest repos</span></div>
+</div>
 
 <script src="script.js"></script>
 

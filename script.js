@@ -27,6 +27,8 @@ const statsBar = document.getElementById("stats-bar");
 const langBar = document.getElementById("lang-bar");
 const langChips = document.getElementById("lang-chips");
 const sortSelect = document.getElementById("sort");
+const bgGlow = document.getElementById("bg-glow");
+const bgGrid = document.getElementById("bg-grid");
 
 let allRepos = [];
 let activeLanguage = null;
@@ -35,6 +37,70 @@ let currentSort = "updated";
 const PAGE_LOAD_TIME = Date.now();
 
 const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+// Motion (https://motion.dev) is loaded via CDN in index.html. If it fails
+// to load — blocked CDN, offline, whatever — motionAnimate stays null and
+// every spring-hover call below just no-ops, falling back to the plain CSS
+// hover states already defined in style.css. Nothing breaks either way.
+const motionAnimate = (typeof Motion !== "undefined" && Motion.animate) || null;
+
+// Spring-animates el to `props` if Motion loaded; otherwise does nothing
+// (the CSS :hover rules still apply on their own in that case).
+function springTo(el, props, opts = {}){
+    if(!motionAnimate || prefersReducedMotion) return;
+    motionAnimate(el, props, { type: "spring", stiffness: 300, damping: 22, ...opts });
+}
+
+// Binds a springy scale-up-on-hover to one or more elements. Safe to call
+// repeatedly on freshly-created DOM nodes (cards, chips) since it's just
+// addEventListener on whatever's passed in.
+function addHoverScale(els, hoverScale = 1.05){
+    els.forEach(el => {
+        el.addEventListener("mouseenter", () => springTo(el, { scale: hoverScale }));
+        el.addEventListener("mouseleave", () => springTo(el, { scale: 1 }));
+    });
+}
+
+// -------------------------
+// Ambient background — cursor-following glow + subtle grid parallax.
+// rAF-throttled so rapid mousemove events don't queue up redundant work.
+// -------------------------
+(function initBackgroundMotion(){
+    if(!motionAnimate || prefersReducedMotion) return;
+
+    const glowRadius = 280; // half of #bg-glow's 560px width/height, for centering
+
+    let mouseX = window.innerWidth / 2;
+    let mouseY = window.innerHeight / 2;
+    let queued = false;
+
+    function update(){
+        motionAnimate(bgGlow,
+            { x: mouseX - glowRadius, y: mouseY - glowRadius },
+            { type: "spring", stiffness: 40, damping: 18, mass: 0.4 }
+        );
+
+        motionAnimate(bgGrid,
+            {
+                x: (mouseX - window.innerWidth / 2) * -0.015,
+                y: (mouseY - window.innerHeight / 2) * -0.015,
+            },
+            { type: "spring", stiffness: 25, damping: 20 }
+        );
+
+        queued = false;
+    }
+
+    window.addEventListener("mousemove", e => {
+        mouseX = e.clientX;
+        mouseY = e.clientY;
+
+        if(!queued){
+            queued = true;
+            requestAnimationFrame(update);
+        }
+    });
+})();
 
 // Animates a number from 0 up to `target`, writing through `render(n)` each
 // frame. Used for the stats bar so it feels like the numbers are tallying
@@ -139,6 +205,7 @@ function setHelpVisible(visible){
 }
 
 helpToggle.addEventListener("click", () => setHelpVisible(helpPanel.hidden));
+addHoverScale([refreshBtn, helpToggle], 1.06);
 
 // -------------------------
 // Language colors (subset of GitHub's linguist palette)
@@ -270,6 +337,10 @@ function renderLangChips(repos, breakdown){
             applyFilter();
         });
     });
+    // Chips keep their plain CSS hover/active transform (see style.css) —
+    // deliberately not Motion-driven here, since the active state's own
+    // persistent transform would get clobbered by Motion's inline style
+    // on mouseleave.
 }
 
 // Single call site for "recompute everything language-related off this
@@ -511,6 +582,18 @@ function render(repos, query = ""){
         </div>
     `}).join("");
 
+    // Cards get a lift (CSS handles border-color/shadow already; Motion
+    // takes over the transform for the springy part). Action buttons inside
+    // get a plain scale bounce.
+    if(motionAnimate && !prefersReducedMotion){
+        grid.querySelectorAll(".card").forEach(card => {
+            card.addEventListener("mouseenter", () => springTo(card, { y: -6, scale: 1.015 }));
+            card.addEventListener("mouseleave", () => springTo(card, { y: 0, scale: 1 }));
+        });
+
+        addHoverScale(grid.querySelectorAll(".visit-site-btn, .github-link"), 1.06);
+    }
+
 }
 
 // -------------------------
@@ -675,5 +758,6 @@ refreshBtn.addEventListener("click", () => {
             </div>
         `;
         document.getElementById("empty-pull").addEventListener("click", fetchRepos);
+        addHoverScale([document.getElementById("empty-pull")], 1.06);
     }
 })();

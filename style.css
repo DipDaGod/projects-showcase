@@ -32,6 +32,39 @@ body{
 
 a{ color:inherit; }
 
+/* ---------- ambient background ---------- */
+#bg-grid{
+    position:fixed;
+    inset:-10% -10% -10% -10%;
+    z-index:-2;
+    background-image:
+        linear-gradient(var(--border) 1px, transparent 1px),
+        linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size:44px 44px;
+    opacity:.18;
+    mask-image:radial-gradient(ellipse 70% 60% at 50% 20%, black 40%, transparent 85%);
+    -webkit-mask-image:radial-gradient(ellipse 70% 60% at 50% 20%, black 40%, transparent 85%);
+    pointer-events:none;
+}
+
+#bg-glow{
+    position:fixed;
+    top:0;
+    left:0;
+    z-index:-1;
+    width:560px;
+    height:560px;
+    border-radius:50%;
+    background:radial-gradient(circle, rgba(63,185,80,.16), rgba(63,185,80,.05) 45%, transparent 72%);
+    filter:blur(6px);
+    pointer-events:none;
+    will-change:transform;
+}
+
+@media (prefers-reduced-motion: reduce){
+    #bg-glow{ display:none; }
+}
+
 /* ---------- terminal window ---------- */
 .term{
     max-width:1000px;

@@ -28,7 +28,6 @@ const langBar = document.getElementById("lang-bar");
 const langChips = document.getElementById("lang-chips");
 const sortSelect = document.getElementById("sort");
 const bgGlow = document.getElementById("bg-glow");
-const bgGrid = document.getElementById("bg-grid");
 
 let allRepos = [];
 let activeLanguage = null;
@@ -62,13 +61,13 @@ function addHoverScale(els, hoverScale = 1.05){
 }
 
 // -------------------------
-// Ambient background — cursor-following glow + subtle grid parallax.
+// Ambient background — cursor-following glow.
 // rAF-throttled so rapid mousemove events don't queue up redundant work.
 // -------------------------
 (function initBackgroundMotion(){
     if(!motionAnimate || prefersReducedMotion) return;
 
-    const glowRadius = 280; // half of #bg-glow's 560px width/height, for centering
+    const glowRadius = 380; // half of #bg-glow's 760px width/height, for centering
 
     let mouseX = window.innerWidth / 2;
     let mouseY = window.innerHeight / 2;
@@ -77,15 +76,7 @@ function addHoverScale(els, hoverScale = 1.05){
     function update(){
         motionAnimate(bgGlow,
             { x: mouseX - glowRadius, y: mouseY - glowRadius },
-            { type: "spring", stiffness: 40, damping: 18, mass: 0.4 }
-        );
-
-        motionAnimate(bgGrid,
-            {
-                x: (mouseX - window.innerWidth / 2) * -0.015,
-                y: (mouseY - window.innerHeight / 2) * -0.015,
-            },
-            { type: "spring", stiffness: 25, damping: 20 }
+            { type: "spring", stiffness: 26, damping: 24, mass: 0.6 }
         );
 
         queued = false;
@@ -100,6 +91,120 @@ function addHoverScale(els, hoverScale = 1.05){
             requestAnimationFrame(update);
         }
     });
+})();
+
+// -------------------------
+// ASCII flow field — a grid of glyphs that bend to face the cursor and
+// brighten the closer they are to it, then ease back to resting rotation/
+// opacity as the cursor moves away. Runs on canvas (not per-glyph DOM
+// nodes) since there are hundreds of cells on a typical viewport and this
+// needs to redraw every frame regardless of mouse activity for the ease-out
+// to look smooth once the cursor stops moving.
+// -------------------------
+(function initAsciiFlowField(){
+    const canvas = document.getElementById("ascii-flow");
+    const ctx = canvas && canvas.getContext("2d");
+    if(!ctx) return;
+
+    const GLYPH = "·";
+    const SPACING = 34;              // px between glyph centers
+    const INFLUENCE_RADIUS = 200;    // px — how far the cursor's pull reaches
+    const MAX_ROTATION = Math.PI / 3;
+    const REST_OPACITY = 0.16;
+    const PEAK_OPACITY = 0.6;
+    const EASE = 0.08;               // per-frame smoothing — lower = slower, floatier settle
+    const MOUSE_EASE = 0.15;         // extra lag on the tracked cursor position itself
+
+    let dpr = 1;
+    let cells = [];
+    let mouseX = -9999, mouseY = -9999;       // eased, what's actually used to compute distortion
+    let targetMouseX = -9999, targetMouseY = -9999; // raw, updated straight from the event
+
+    function resize(){
+        dpr = Math.min(window.devicePixelRatio || 1, 2);
+        canvas.width = window.innerWidth * dpr;
+        canvas.height = window.innerHeight * dpr;
+        canvas.style.width = window.innerWidth + "px";
+        canvas.style.height = window.innerHeight + "px";
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.font = "13px 'JetBrains Mono', monospace";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+
+        const cols = Math.ceil(window.innerWidth / SPACING) + 1;
+        const rows = Math.ceil(window.innerHeight / SPACING) + 1;
+
+        cells = [];
+        for(let r = 0; r <= rows; r++){
+            for(let c = 0; c <= cols; c++){
+                cells.push({
+                    x: c * SPACING,
+                    y: r * SPACING,
+                    rot: 0, targetRot: 0,
+                    scale: 1, targetScale: 1,
+                    opacity: REST_OPACITY, targetOpacity: REST_OPACITY,
+                });
+            }
+        }
+    }
+
+    window.addEventListener("resize", resize);
+    resize();
+
+    window.addEventListener("mousemove", e => {
+        targetMouseX = e.clientX;
+        targetMouseY = e.clientY;
+    });
+
+    function drawFrame(interactive){
+        ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+
+        for(const cell of cells){
+            if(interactive){
+                const dx = cell.x - mouseX;
+                const dy = cell.y - mouseY;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                if(dist < INFLUENCE_RADIUS){
+                    const influence = 1 - dist / INFLUENCE_RADIUS; // 0 at edge → 1 at cursor
+                    const eased = influence * influence;           // ease-in falloff, softer at the rim
+                    cell.targetRot = Math.atan2(dy, dx) * eased * (MAX_ROTATION / Math.PI);
+                    cell.targetScale = 1 + eased * 0.5;
+                    cell.targetOpacity = REST_OPACITY + eased * (PEAK_OPACITY - REST_OPACITY);
+                } else {
+                    cell.targetRot = 0;
+                    cell.targetScale = 1;
+                    cell.targetOpacity = REST_OPACITY;
+                }
+
+                cell.rot += (cell.targetRot - cell.rot) * EASE;
+                cell.scale += (cell.targetScale - cell.scale) * EASE;
+                cell.opacity += (cell.targetOpacity - cell.opacity) * EASE;
+            }
+
+            ctx.save();
+            ctx.translate(cell.x, cell.y);
+            if(cell.rot) ctx.rotate(cell.rot);
+            if(cell.scale !== 1) ctx.scale(cell.scale, cell.scale);
+            ctx.fillStyle = `rgba(126,231,135,${cell.opacity.toFixed(3)})`;
+            ctx.fillText(GLYPH, 0, 0);
+            ctx.restore();
+        }
+    }
+
+    if(prefersReducedMotion){
+        drawFrame(false); // static, undistorted grid — no cursor tracking, no rAF loop
+        return;
+    }
+
+    function loop(){
+        mouseX += (targetMouseX - mouseX) * MOUSE_EASE;
+        mouseY += (targetMouseY - mouseY) * MOUSE_EASE;
+        drawFrame(true);
+        requestAnimationFrame(loop);
+    }
+
+    requestAnimationFrame(loop);
 })();
 
 // Animates a number from 0 up to `target`, writing through `render(n)` each

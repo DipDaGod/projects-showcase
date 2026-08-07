@@ -24,6 +24,7 @@ const uptimeEl = document.getElementById("uptime");
 const helpPanel = document.getElementById("help-panel");
 const helpToggle = document.getElementById("help-toggle");
 const statsBar = document.getElementById("stats-bar");
+const langBar = document.getElementById("lang-bar");
 const langChips = document.getElementById("lang-chips");
 const sortSelect = document.getElementById("sort");
 
@@ -32,6 +33,29 @@ let activeLanguage = null;
 let currentSort = "updated";
 
 const PAGE_LOAD_TIME = Date.now();
+
+const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+// Animates a number from 0 up to `target`, writing through `render(n)` each
+// frame. Used for the stats bar so it feels like the numbers are tallying
+// up rather than just appearing.
+function animateNumber(target, render, duration = 700){
+    if(prefersReducedMotion){
+        render(target);
+        return;
+    }
+
+    const start = performance.now();
+
+    function tick(now){
+        const t = Math.min((now - start) / duration, 1);
+        const eased = 1 - Math.pow(1 - t, 3); // ease-out cubic
+        render(Math.round(target * eased));
+        if(t < 1) requestAnimationFrame(tick);
+    }
+
+    requestAnimationFrame(tick);
+}
 
 // -------------------------
 // Boot sequence — purely cosmetic, skippable, respects reduced motion
@@ -132,7 +156,8 @@ function langColor(lang){
 }
 
 // -------------------------
-// Stats bar — computed off the full repo set, not the filtered view
+// Stats bar — computed off the full repo set, not the filtered view.
+// Repo count and star count animate up rather than snapping to place.
 // -------------------------
 function renderStatsBar(repos){
     const totalStars = repos.reduce((sum, r) => sum + r.stargazers_count, 0);
@@ -147,11 +172,11 @@ function renderStatsBar(repos){
 
     statsBar.innerHTML = `
         <div class="stat-box">
-            <span class="stat-value">${repos.length}</span>
+            <span class="stat-value" id="stat-repos">0</span>
             <span class="stat-label">repositories</span>
         </div>
         <div class="stat-box">
-            <span class="stat-value accent">★ ${totalStars}</span>
+            <span class="stat-value accent" id="stat-stars">★ 0</span>
             <span class="stat-label">total stars</span>
         </div>
         <div class="stat-box">
@@ -163,6 +188,47 @@ function renderStatsBar(repos){
             <span class="stat-label">top language</span>
         </div>
     `;
+
+    const reposEl = document.getElementById("stat-repos");
+    const starsEl = document.getElementById("stat-stars");
+
+    animateNumber(repos.length, n => reposEl.textContent = n);
+    animateNumber(totalStars, n => starsEl.textContent = `★ ${n}`);
+}
+
+// -------------------------
+// Language distribution bar — fills left to right on render, GitHub-style.
+// -------------------------
+function renderLangBar(repos){
+    const langCounts = {};
+    let counted = 0;
+
+    repos.forEach(r => {
+        if(r.language){
+            langCounts[r.language] = (langCounts[r.language] || 0) + 1;
+            counted++;
+        }
+    });
+
+    if(counted === 0){
+        langBar.innerHTML = "";
+        return;
+    }
+
+    const langs = Object.entries(langCounts).sort((a, b) => b[1] - a[1]);
+
+    langBar.innerHTML = langs.map(([lang, count]) => {
+        const pct = (count / counted) * 100;
+        return `<span class="lang-bar-seg" style="background:${langColor(lang)}" data-pct="${pct}" title="${escapeHtml(lang)} — ${count}"></span>`;
+    }).join("");
+
+    // Set widths on the next frame so the 0 → target change actually
+    // transitions instead of rendering already-filled.
+    requestAnimationFrame(() => {
+        langBar.querySelectorAll(".lang-bar-seg").forEach(seg => {
+            seg.style.width = `${seg.dataset.pct}%`;
+        });
+    });
 }
 
 // -------------------------
@@ -273,6 +339,7 @@ async function fetchRepos(){
 
         grid.classList.remove("refreshing");
         renderStatsBar(allRepos);
+        renderLangBar(allRepos);
         renderLangChips(allRepos);
         applyFilter();
 
@@ -557,6 +624,7 @@ refreshBtn.addEventListener("click", () => {
     if(cache && cache.data && cache.data.length){
         allRepos = cache.data;
         renderStatsBar(allRepos);
+        renderLangBar(allRepos);
         renderLangChips(allRepos);
         applyFilter();
 
@@ -569,6 +637,7 @@ refreshBtn.addEventListener("click", () => {
         subtitle.textContent = "no cached data yet";
         status.textContent = "hit pull to load repositories";
         statsBar.innerHTML = "";
+        langBar.innerHTML = "";
         langChips.innerHTML = "";
         grid.innerHTML = `
             <div class="empty">

@@ -144,8 +144,8 @@ helpToggle.addEventListener("click", () => setHelpVisible(helpPanel.hidden));
 // Language colors (subset of GitHub's linguist palette)
 // -------------------------
 const LANG_COLORS = {
-    JavaScript:"#f1e05a", TypeScript:"#3178c6", Python:"#3572A5",
-    HTML:"#e34c26", CSS:"#563d7c", Shell:"#89e051", Java:"#b07219",
+    JavaScript:"#F7DF1E", TypeScript:"#3178C6", Python:"#3572A5",
+    HTML:"#E34F26", CSS:"#563D7C", Shell:"#89e051", Java:"#b07219",
     "C++":"#f34b7d", C:"#555555", "C#":"#178600", Go:"#00ADD8",
     Rust:"#dea584", PHP:"#4F5D95", Ruby:"#701516", Swift:"#F05138",
     Kotlin:"#A97BFF", Dart:"#00B4AB", Vue:"#41b883", Jupyter:"#DA5B0B"
@@ -411,68 +411,64 @@ function render(repos, query = ""){
     grid.innerHTML = repos.map((repo, i) => `
         <div class="card" style="--card-delay:${Math.min(i, 10) * 30}ms">
 
-            <img
-                class="card-thumb"
-                src="https://opengraph.githubassets.com/1/${USERNAME}/${repo.name}"
-                alt=""
-                loading="lazy"
-                onerror="this.remove()"
-            >
+            <div class="name-row">
+                <span class="branch-icon">⌥</span>
+                <a
+                    class="name"
+                    href="${repo.html_url}"
+                    target="_blank"
+                >
+                    ${highlightMatch(repo.name, query)}
+                </a>
+            </div>
 
-            <div class="card-body">
+            <div class="desc">
+                ${repo.description
+                    ? escapeHtml(repo.description)
+                    : "No description."}
+            </div>
 
-                <div class="name-row">
-                    <span class="branch-icon">⌥</span>
-                    <a
-                        class="name"
-                        href="${repo.html_url}"
-                        target="_blank"
-                    >
-                        ${highlightMatch(repo.name, query)}
-                    </a>
-                </div>
+            ${
+                repo.language
+                    ? `
+                    <div class="tech-badge">
+                        <span class="lang-dot" style="background:${langColor(repo.language)}"></span>
+                        ${escapeHtml(repo.language)}
+                    </div>
+                    `
+                    : ""
+            }
 
-                <div class="desc">
-                    ${repo.description
-                        ? escapeHtml(repo.description)
-                        : "No description."}
-                </div>
+            <div class="card-preview">
+                <div class="card-divider"></div>
+                <img
+                    class="card-thumb"
+                    src="https://opengraph.githubassets.com/1/${USERNAME}/${repo.name}"
+                    alt=""
+                    loading="lazy"
+                    onerror="this.closest('.card-preview').remove()"
+                >
+                <div class="card-divider"></div>
+            </div>
 
+            <div class="card-actions">
                 ${
                     repo.homepage
                         ? `
-                        <a
-                            class="site-link"
-                            href="${repo.homepage}"
-                            target="_blank"
-                        >
-                            🔗 visit site
+                        <a class="visit-site-btn" href="${repo.homepage}" target="_blank">
+                            <span class="arrow">↗</span> Visit Site
                         </a>
                         `
                         : ""
                 }
+                <a class="github-link" href="${repo.html_url}" target="_blank">Github</a>
+            </div>
 
-                <div class="meta">
-
-                    ${
-                        repo.language
-                            ? `
-                            <span>
-                                <span class="lang-dot" style="background:${langColor(repo.language)}"></span>
-                                ${escapeHtml(repo.language)}
-                            </span>
-                            `
-                            : ""
-                    }
-
-                    <span>★ ${repo.stargazers_count}</span>
-
-                    <span>
-                        ${new Date(repo.pushed_at).toLocaleDateString()}
-                    </span>
-
-                </div>
-
+            <div class="meta">
+                <span>★ ${repo.stargazers_count}</span>
+                <span>
+                    ${new Date(repo.pushed_at).toLocaleDateString()}
+                </span>
             </div>
 
         </div>

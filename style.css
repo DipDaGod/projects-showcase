@@ -378,30 +378,34 @@ h1{ display:none; } /* replaced by terminal title */
     border:1px solid var(--border);
     border-left:2px solid var(--border-hi);
     border-radius:8px;
-    overflow:hidden;
+    padding:16px 17px;
     display:flex;
     flex-direction:column;
+    gap:11px;
     transition:border-color .15s, transform .15s, box-shadow .15s;
     opacity:0;
     animation:cardIn .5s cubic-bezier(.16,1,.3,1) forwards;
     animation-delay:var(--card-delay, 0ms);
 }
 
-.card-thumb{
-    width:100%;
-    aspect-ratio:1200 / 630;
-    object-fit:cover;
-    display:block;
-    background:var(--term);
-    border-bottom:1px solid var(--border);
+.card-divider{
+    height:1px;
+    background:var(--border);
 }
 
-.card-body{
-    padding:16px 17px;
+.card-preview{
     display:flex;
     flex-direction:column;
-    gap:9px;
-    flex:1;
+    gap:11px;
+}
+
+.card-thumb{
+    width:100%;
+    height:110px;
+    object-fit:cover;
+    border-radius:6px;
+    border:1px solid var(--border);
+    display:block;
 }
 
 @keyframes cardIn{
@@ -420,7 +424,7 @@ h1{ display:none; } /* replaced by terminal title */
     border-color:var(--green);
 }
 
-.name:focus-visible, .site-link:focus-visible, #refresh:focus-visible, #filter:focus-visible, .cta-btn:focus-visible{
+.name:focus-visible, .visit-site-btn:focus-visible, .github-link:focus-visible, #refresh:focus-visible, #filter:focus-visible, .cta-btn:focus-visible{
     outline:2px solid var(--green);
     outline-offset:2px;
 }
@@ -501,22 +505,81 @@ h1{ display:none; } /* replaced by terminal title */
     line-height:1.45;
 }
 
-.site-link{
+/* tech badge — the language pill under name/desc, distinct from the meta row */
+.tech-badge{
     display:inline-flex;
     width:fit-content;
     align-items:center;
     gap:6px;
-    padding:5px 10px;
-    border-radius:5px;
-    text-decoration:none;
+    padding:4px 11px;
+    border-radius:99px;
+    background:rgba(255,255,255,.04);
+    border:1px solid var(--border);
     font-family:var(--mono);
-    font-size:.78rem;
-    color:var(--green);
-    background:rgba(63,185,80,.08);
-    border:1px solid rgba(63,185,80,.3);
+    font-size:.72rem;
+    color:var(--muted);
 }
 
-.site-link:hover{ background:rgba(63,185,80,.16); }
+/* hero action — Visit Site */
+.card-actions{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    flex-wrap:wrap;
+}
+
+.visit-site-btn{
+    display:inline-flex;
+    align-items:center;
+    gap:7px;
+    padding:9px 16px;
+    border-radius:7px;
+    text-decoration:none;
+    font-family:var(--mono);
+    font-weight:600;
+    font-size:.85rem;
+    color:#7ee787;
+    background:rgba(63,185,80,.1);
+    border:1px solid rgba(63,185,80,.35);
+    transition:border-color .15s, background .15s;
+}
+
+.visit-site-btn:hover{
+    border-color:#7ee787;
+    background:rgba(63,185,80,.18);
+}
+
+.visit-site-btn .arrow{
+    display:inline-block;
+    transition:transform .15s ease;
+}
+
+.visit-site-btn:hover .arrow{
+    transform:translateX(2px);
+}
+
+@media (prefers-reduced-motion: reduce){
+    .visit-site-btn .arrow{ transition:none; }
+}
+
+.github-link{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding:9px 14px;
+    border-radius:7px;
+    text-decoration:none;
+    font-family:var(--mono);
+    font-size:.82rem;
+    color:var(--muted);
+    border:1px solid var(--border);
+    transition:border-color .15s, color .15s;
+}
+
+.github-link:hover{
+    border-color:var(--border-hi);
+    color:var(--text);
+}
 
 .meta{
     display:flex;

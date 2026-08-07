@@ -71,7 +71,7 @@ const BOOT_LINES = [
 function runBootSequence(){
     const boot = document.getElementById("boot");
 
-    if(window.matchMedia("(prefers-reduced-motion: reduce)").matches){
+    if(prefersReducedMotion){
         boot.remove();
         return;
     }
@@ -155,30 +155,41 @@ const LANG_COLORS_LC = Object.fromEntries(
     Object.entries(LANG_COLORS).map(([k, v]) => [k.toLowerCase(), v])
 );
 
-function langColor(lang){
-    return LANG_COLORS_LC[String(lang).toLowerCase()] || "#8b949e";
+// Case-insensitive since GitHub topics are lowercase but this map's keys
+// aren't. Pass fallback=null to find out whether a language/topic is
+// actually recognized (used to decide whether to show a dot at all).
+function langColor(lang, fallback = "#8b949e"){
+    return LANG_COLORS_LC[String(lang).toLowerCase()] ?? fallback;
 }
 
-// Returns null (rather than the grey fallback) when the language/topic isn't
-// recognized, so callers can decide to skip the dot entirely.
-function knownLangColor(lang){
-    return LANG_COLORS_LC[String(lang).toLowerCase()] || null;
+// -------------------------
+// Single source of truth for per-language counts — the stats bar, the
+// language bar, and the filter chips all read from this instead of each
+// looping the repo list themselves.
+// -------------------------
+function getLangBreakdown(repos){
+    const counts = {};
+    let total = 0;
+
+    repos.forEach(r => {
+        if(r.language){
+            counts[r.language] = (counts[r.language] || 0) + 1;
+            total++;
+        }
+    });
+
+    const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+
+    return { counts, entries, total };
 }
 
 // -------------------------
 // Stats bar — computed off the full repo set, not the filtered view.
 // Repo count and star count animate up rather than snapping to place.
 // -------------------------
-function renderStatsBar(repos){
+function renderStatsBar(repos, breakdown){
     const totalStars = repos.reduce((sum, r) => sum + r.stargazers_count, 0);
-
-    const langCounts = {};
-    repos.forEach(r => {
-        if(r.language) langCounts[r.language] = (langCounts[r.language] || 0) + 1;
-    });
-
-    const langEntries = Object.entries(langCounts).sort((a, b) => b[1] - a[1]);
-    const topLang = langEntries[0]?.[0] ?? "—";
+    const topLang = breakdown.entries[0]?.[0] ?? "—";
 
     statsBar.innerHTML = `
         <div class="stat-box">
@@ -190,7 +201,7 @@ function renderStatsBar(repos){
             <span class="stat-label">total stars</span>
         </div>
         <div class="stat-box">
-            <span class="stat-value">${langEntries.length}</span>
+            <span class="stat-value">${breakdown.entries.length}</span>
             <span class="stat-label">languages</span>
         </div>
         <div class="stat-box">
@@ -209,26 +220,14 @@ function renderStatsBar(repos){
 // -------------------------
 // Language distribution bar — fills left to right on render, GitHub-style.
 // -------------------------
-function renderLangBar(repos){
-    const langCounts = {};
-    let counted = 0;
-
-    repos.forEach(r => {
-        if(r.language){
-            langCounts[r.language] = (langCounts[r.language] || 0) + 1;
-            counted++;
-        }
-    });
-
-    if(counted === 0){
+function renderLangBar(breakdown){
+    if(breakdown.total === 0){
         langBar.innerHTML = "";
         return;
     }
 
-    const langs = Object.entries(langCounts).sort((a, b) => b[1] - a[1]);
-
-    langBar.innerHTML = langs.map(([lang, count]) => {
-        const pct = (count / counted) * 100;
+    langBar.innerHTML = breakdown.entries.map(([lang, count]) => {
+        const pct = (count / breakdown.total) * 100;
         return `<span class="lang-bar-seg" style="background:${langColor(lang)}" data-pct="${pct}" title="${escapeHtml(lang)} — ${count}"></span>`;
     }).join("");
 
@@ -244,15 +243,8 @@ function renderLangBar(repos){
 // -------------------------
 // Language filter chips
 // -------------------------
-function renderLangChips(repos){
-    const langCounts = {};
-    repos.forEach(r => {
-        if(r.language) langCounts[r.language] = (langCounts[r.language] || 0) + 1;
-    });
-
-    const langs = Object.entries(langCounts).sort((a, b) => b[1] - a[1]);
-
-    if(activeLanguage && !langCounts[activeLanguage]){
+function renderLangChips(repos, breakdown){
+    if(activeLanguage && !breakdown.counts[activeLanguage]){
         activeLanguage = null; // previously active language no longer present (e.g. after a fresh pull)
     }
 
@@ -262,7 +254,7 @@ function renderLangChips(repos){
         </button>
     `;
 
-    const langChipsHtml = langs.map(([lang, count]) => `
+    const langChipsHtml = breakdown.entries.map(([lang, count]) => `
         <button class="chip ${activeLanguage === lang ? "active" : ""}" data-lang="${escapeHtml(lang)}">
             <span class="lang-dot" style="background:${langColor(lang)}"></span>
             ${escapeHtml(lang)} <span style="opacity:.6">${count}</span>
@@ -274,10 +266,26 @@ function renderLangChips(repos){
     langChips.querySelectorAll(".chip").forEach(chip => {
         chip.addEventListener("click", () => {
             activeLanguage = chip.dataset.lang || null;
-            renderLangChips(allRepos); // refresh active states
+            renderLangChips(repos, breakdown); // refresh active states
             applyFilter();
         });
     });
+}
+
+// Single call site for "recompute everything language-related off this
+// repo list" — used everywhere allRepos changes, instead of three separate
+// render calls copy-pasted at each call site.
+function renderLangSections(repos){
+    const breakdown = getLangBreakdown(repos);
+    renderStatsBar(repos, breakdown);
+    renderLangBar(breakdown);
+    renderLangChips(repos, breakdown);
+}
+
+function clearLangSections(){
+    statsBar.innerHTML = "";
+    langBar.innerHTML = "";
+    langChips.innerHTML = "";
 }
 
 // -------------------------
@@ -348,9 +356,7 @@ async function fetchRepos(){
         allRepos = repos;
 
         grid.classList.remove("refreshing");
-        renderStatsBar(allRepos);
-        renderLangBar(allRepos);
-        renderLangChips(allRepos);
+        renderLangSections(allRepos);
         applyFilter();
 
         localStorage.setItem(
@@ -468,12 +474,15 @@ function render(repos, query = ""){
                 tags.length
                     ? `
                     <div class="tech-tags">
-                        ${tags.map(tag => `
+                        ${tags.map(tag => {
+                            const dotColor = langColor(tag, null);
+                            return `
                             <span class="tech-tag">
-                                ${knownLangColor(tag) ? `<span class="lang-dot" style="background:${langColor(tag)}"></span>` : ""}
+                                ${dotColor ? `<span class="lang-dot" style="background:${dotColor}"></span>` : ""}
                                 ${escapeHtml(tag)}
                             </span>
-                        `).join("")}
+                            `;
+                        }).join("")}
                     </div>
                     `
                     : ""
@@ -647,9 +656,7 @@ refreshBtn.addEventListener("click", () => {
 
     if(cache && cache.data && cache.data.length){
         allRepos = cache.data;
-        renderStatsBar(allRepos);
-        renderLangBar(allRepos);
-        renderLangChips(allRepos);
+        renderLangSections(allRepos);
         applyFilter();
 
         subtitle.textContent =
@@ -660,9 +667,7 @@ refreshBtn.addEventListener("click", () => {
     } else {
         subtitle.textContent = "no cached data yet";
         status.textContent = "hit pull to load repositories";
-        statsBar.innerHTML = "";
-        langBar.innerHTML = "";
-        langChips.innerHTML = "";
+        clearLangSections();
         grid.innerHTML = `
             <div class="empty">
                 <span>no data yet</span>

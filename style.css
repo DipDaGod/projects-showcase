@@ -109,13 +109,32 @@ a{ color:inherit; }
     font-size:.92rem;
     display:flex;
     flex-wrap:wrap;
-    gap:8px;
     align-items:baseline;
+    gap:0;
 }
 
-.prompt-sym{ color:var(--green); font-weight:700; }
-.prompt-path{ color:var(--purple); }
-.prompt-cmd{ color:var(--text); }
+.prompt-user{ color:var(--green); font-weight:700; }
+.prompt-punct{ color:var(--muted-dim); }
+.prompt-path{ color:var(--purple); font-weight:700; }
+.prompt-cmd{ color:var(--text); margin-left:8px; }
+
+.prompt-cursor{
+    display:inline-block;
+    width:8px;
+    height:1.05em;
+    margin-left:6px;
+    background:var(--green);
+    transform:translateY(2px);
+    animation:promptBlink 1.1s steps(1) infinite;
+}
+
+@keyframes promptBlink{
+    50%{ opacity:0; }
+}
+
+@media (prefers-reduced-motion: reduce){
+    .prompt-cursor{ animation:none; }
+}
 
 #subtitle{
     font-family:var(--mono);
@@ -505,9 +524,15 @@ h1{ display:none; } /* replaced by terminal title */
     border-color:var(--green);
 }
 
-.name:focus-visible, .visit-site-btn:focus-visible, .github-link:focus-visible, #refresh:focus-visible, #filter:focus-visible, .cta-btn:focus-visible{
+.name:focus-visible, .visit-site-btn:focus-visible, .github-link:focus-visible, #refresh:focus-visible, .cta-btn:focus-visible{
     outline:2px solid var(--green);
     outline-offset:2px;
+}
+
+#filter:focus{
+    outline:none; /* .filter-wrap:focus-within already shows the border — an
+                      outline on the input itself doubles up and misaligns
+                      with the wrap's rounded corners */
 }
 
 @media (prefers-reduced-motion: reduce){

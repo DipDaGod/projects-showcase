@@ -374,6 +374,7 @@ h1{ display:none; } /* replaced by terminal title */
 }
 
 .card{
+    position:relative;
     background:var(--card);
     border:1px solid var(--border);
     border-left:2px solid var(--border-hi);
@@ -388,24 +389,70 @@ h1{ display:none; } /* replaced by terminal title */
     animation-delay:var(--card-delay, 0ms);
 }
 
+.card::before, .card::after{
+    content:"";
+    position:absolute;
+    width:9px;
+    height:9px;
+    border:1px solid var(--border-hi);
+    opacity:.7;
+    pointer-events:none;
+}
+
+.card::before{
+    top:-1px; left:-1px;
+    border-right:none;
+    border-bottom:none;
+}
+
+.card::after{
+    bottom:-1px; right:-1px;
+    border-left:none;
+    border-top:none;
+}
+
+.card-featured{
+    border-color:rgba(210,153,34,.4);
+    border-left-color:var(--yellow);
+}
+
+.card-featured::before, .card-featured::after{
+    border-color:var(--yellow);
+}
+
+.card-header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+}
+
+.featured-badge{
+    font-family:var(--mono);
+    font-size:.7rem;
+    letter-spacing:.05em;
+    text-transform:uppercase;
+    color:var(--yellow);
+    white-space:nowrap;
+}
+
 .card-divider{
     height:1px;
     background:var(--border);
 }
 
 .card-preview{
-    display:flex;
-    flex-direction:column;
-    gap:11px;
+    display:block;
 }
 
 .card-thumb{
     width:100%;
-    height:110px;
+    aspect-ratio:16 / 9;
     object-fit:cover;
     border-radius:6px;
     border:1px solid var(--border);
     display:block;
+    background:var(--term);
 }
 
 @keyframes cardIn{
@@ -506,17 +553,18 @@ h1{ display:none; } /* replaced by terminal title */
 }
 
 /* tech badge — the language pill under name/desc, distinct from the meta row */
-.tech-badge{
+.tech-tags{
+    display:flex;
+    flex-wrap:wrap;
+    gap:14px;
+}
+
+.tech-tag{
     display:inline-flex;
-    width:fit-content;
     align-items:center;
     gap:6px;
-    padding:4px 11px;
-    border-radius:99px;
-    background:rgba(255,255,255,.04);
-    border:1px solid var(--border);
     font-family:var(--mono);
-    font-size:.72rem;
+    font-size:.78rem;
     color:var(--muted);
 }
 

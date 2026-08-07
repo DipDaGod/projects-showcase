@@ -151,8 +151,18 @@ const LANG_COLORS = {
     Kotlin:"#A97BFF", Dart:"#00B4AB", Vue:"#41b883", Jupyter:"#DA5B0B"
 };
 
+const LANG_COLORS_LC = Object.fromEntries(
+    Object.entries(LANG_COLORS).map(([k, v]) => [k.toLowerCase(), v])
+);
+
 function langColor(lang){
-    return LANG_COLORS[lang] || "#8b949e";
+    return LANG_COLORS_LC[String(lang).toLowerCase()] || "#8b949e";
+}
+
+// Returns null (rather than the grey fallback) when the language/topic isn't
+// recognized, so callers can decide to skip the dot entirely.
+function knownLangColor(lang){
+    return LANG_COLORS_LC[String(lang).toLowerCase()] || null;
 }
 
 // -------------------------
@@ -408,19 +418,45 @@ function render(repos, query = ""){
         return;
     }
 
-    grid.innerHTML = repos.map((repo, i) => `
-        <div class="card" style="--card-delay:${Math.min(i, 10) * 30}ms">
+    grid.innerHTML = repos.map((repo, i) => {
 
-            <div class="name-row">
-                <span class="branch-icon">⌥</span>
-                <a
-                    class="name"
-                    href="${repo.html_url}"
-                    target="_blank"
-                >
-                    ${highlightMatch(repo.name, query)}
-                </a>
+        const topics = repo.topics || [];
+        const featured = topics.includes("featured");
+        const tags = topics.filter(t => t !== "featured");
+        if(tags.length === 0 && repo.language) tags.push(repo.language);
+
+        const previewSrc = repo.ogImage || `https://opengraph.githubassets.com/1/${USERNAME}/${repo.name}`;
+
+        return `
+        <div class="card ${featured ? "card-featured" : ""}" style="--card-delay:${Math.min(i, 10) * 30}ms">
+
+            <div class="card-header">
+                <div class="name-row">
+                    <span class="branch-icon">⌥</span>
+                    <a
+                        class="name"
+                        href="${repo.html_url}"
+                        target="_blank"
+                    >
+                        ${highlightMatch(repo.name, query)}
+                    </a>
+                </div>
+                ${featured ? `<span class="featured-badge">Featured</span>` : ""}
             </div>
+
+            <div class="card-divider"></div>
+
+            <div class="card-preview">
+                <img
+                    class="card-thumb"
+                    src="${previewSrc}"
+                    alt=""
+                    loading="lazy"
+                    onerror="this.closest('.card-preview').remove()"
+                >
+            </div>
+
+            <div class="card-divider"></div>
 
             <div class="desc">
                 ${repo.description
@@ -429,27 +465,19 @@ function render(repos, query = ""){
             </div>
 
             ${
-                repo.language
+                tags.length
                     ? `
-                    <div class="tech-badge">
-                        <span class="lang-dot" style="background:${langColor(repo.language)}"></span>
-                        ${escapeHtml(repo.language)}
+                    <div class="tech-tags">
+                        ${tags.map(tag => `
+                            <span class="tech-tag">
+                                ${knownLangColor(tag) ? `<span class="lang-dot" style="background:${langColor(tag)}"></span>` : ""}
+                                ${escapeHtml(tag)}
+                            </span>
+                        `).join("")}
                     </div>
                     `
                     : ""
             }
-
-            <div class="card-preview">
-                <div class="card-divider"></div>
-                <img
-                    class="card-thumb"
-                    src="https://opengraph.githubassets.com/1/${USERNAME}/${repo.name}"
-                    alt=""
-                    loading="lazy"
-                    onerror="this.closest('.card-preview').remove()"
-                >
-                <div class="card-divider"></div>
-            </div>
 
             <div class="card-actions">
                 ${
@@ -472,7 +500,7 @@ function render(repos, query = ""){
             </div>
 
         </div>
-    `).join("");
+    `}).join("");
 
 }
 

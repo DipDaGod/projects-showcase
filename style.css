@@ -38,8 +38,17 @@ a{ color:inherit; }
     inset:0;
     z-index:-2;
     pointer-events:none;
-    mask-image:radial-gradient(ellipse 75% 65% at 50% 25%, black 40%, transparent 88%);
-    -webkit-mask-image:radial-gradient(ellipse 75% 65% at 50% 25%, black 40%, transparent 88%);
+    mask-image:radial-gradient(ellipse 75% 65% at 50% 55%, black 40%, transparent 88%);
+    -webkit-mask-image:radial-gradient(ellipse 75% 65% at 50% 55%, black 40%, transparent 88%);
+}
+
+#code-bg{
+    position:fixed;
+    inset:0;
+    z-index:-2;
+    pointer-events:none;
+    mask-image:linear-gradient(to bottom, black 0, black 420px, transparent 620px);
+    -webkit-mask-image:linear-gradient(to bottom, black 0, black 420px, transparent 620px);
 }
 
 #bg-glow{

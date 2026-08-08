@@ -526,7 +526,7 @@ function renderStatsBar(repos, breakdown){
     statsBar.innerHTML = `
         <div class="stat-box">
             <span class="stat-value" id="stat-repos">0</span>
-            <span class="stat-label">repositories</span>
+            <span class="stat-label">public repositories</span>
         </div>
         <div class="stat-box">
             <span class="stat-value accent" id="stat-stars">★ 0</span>
@@ -847,7 +847,7 @@ function render(repos, query = ""){
             </div>
 
             <div class="meta">
-                <span>★ ${repo.stargazers_count}</span>
+                ${repo.stargazers_count > 0 ? `<span>★ ${repo.stargazers_count}</span>` : ""}
                 <span>
                     ${new Date(repo.pushed_at).toLocaleDateString()}
                 </span>
@@ -1019,11 +1019,15 @@ refreshBtn.addEventListener("click", () => {
 });
 
 // -------------------------
-// Initial load — reload does nothing. Just show whatever's cached, if
-// anything. Only the pull button ever talks to the network.
+// Initial load — paints whatever's cached immediately for a fast load.
+// If that cache is under a day old, that's it, nothing else happens (no
+// network call on reload). If it's stale (>24h), a real fetch fires
+// automatically right after, same as hitting pull — the cached view is
+// just what's shown while that happens.
 // -------------------------
 (function loadFromCache(){
     const cache = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
+    const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
     if(cache && cache.data && cache.data.length){
         allRepos = cache.data;
@@ -1035,6 +1039,10 @@ refreshBtn.addEventListener("click", () => {
 
         status.textContent =
             `last synced ${new Date(cache.time).toLocaleString()}`;
+
+        if(Date.now() - cache.time > ONE_DAY_MS){
+            fetchRepos(); // stale — refresh automatically instead of waiting for a manual pull
+        }
     } else {
         subtitle.textContent = "no cached data yet";
         status.textContent = "hit pull to load repositories";

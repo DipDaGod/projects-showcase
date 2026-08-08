@@ -47,8 +47,6 @@ a{ color:inherit; }
     inset:0;
     z-index:-2;
     pointer-events:none;
-    mask-image:linear-gradient(to bottom, black 0, black 420px, transparent 620px);
-    -webkit-mask-image:linear-gradient(to bottom, black 0, black 420px, transparent 620px);
 }
 
 #bg-glow{

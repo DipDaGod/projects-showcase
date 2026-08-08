@@ -208,11 +208,12 @@ function addHoverScale(els, hoverScale = 1.06){
 })();
 
 // -------------------------
-// Running code background — a scrolling feed of fake terminal/code lines,
-// confined to the top of the page (masked out below ~500px in CSS). Each
-// line eases from a dim resting color toward light green the closer the
-// cursor gets to it, then eases back — same interaction language as the
-// ASCII flow field below it, just applied to real text instead of glyphs.
+// Running code background — several columns of a scrolling fake terminal/
+// code feed, spanning the entire page. Each line eases from a dim resting
+// color toward light green the closer the cursor gets to it, then eases
+// back — same interaction language as the ASCII flow field, just applied
+// to real text instead of glyphs. Each column scrolls independently (own
+// speed, own starting content) so it doesn't read as one texture repeated.
 // -------------------------
 (function initCodeBackground(){
     const canvas = document.getElementById("code-bg");
@@ -241,18 +242,27 @@ function addHoverScale(els, hoverScale = 1.06){
     ];
 
     const LINE_HEIGHT = 24;
-    const REST_COLOR = [110, 122, 140];   // dim muted-blue-grey at rest
+    const COLUMN_WIDTH = 300;             // px — also caps how wide a line can render before truncating
+    const COLUMN_PADDING = 24;
+    const REST_COLOR = [90, 100, 116];    // dim muted-blue-grey at rest — lower than before since far more of this is now on screen at once
     const GLOW_COLOR = [126, 231, 135];   // same light green as everything else
     const INFLUENCE = 160;                // px — how far the cursor's warmth reaches
     const EASE = 0.08;
-    const SCROLL_SPEED = 8;               // px/sec, upward
 
     let dpr = 1;
-    let lines = [];
-    let nextLineIndex = 0;
+    let columns = [];
     let mouseX = -9999, mouseY = -9999;
     let targetMouseX = -9999, targetMouseY = -9999;
     let lastTime = performance.now();
+
+    function fitText(text, maxWidth){
+        if(ctx.measureText(text).width <= maxWidth) return text;
+        let t = text;
+        while(t.length > 1 && ctx.measureText(t + "…").width > maxWidth){
+            t = t.slice(0, -1);
+        }
+        return t + "…";
+    }
 
     function resize(){
         dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -264,21 +274,29 @@ function addHoverScale(els, hoverScale = 1.06){
         ctx.font = "13px 'JetBrains Mono', monospace";
         ctx.textBaseline = "middle";
 
-        const visibleRows = Math.ceil(620 / LINE_HEIGHT) + 2;
-        const x = 40;
+        const maxLineWidth = COLUMN_WIDTH - COLUMN_PADDING * 2;
+        const colCount = Math.ceil(window.innerWidth / COLUMN_WIDTH);
+        const rowCount = Math.ceil(window.innerHeight / LINE_HEIGHT) + 2;
 
-        lines = [];
-        nextLineIndex = 0;
-        for(let i = 0; i < visibleRows; i++){
-            const text = LINES[nextLineIndex % LINES.length];
-            nextLineIndex++;
-            lines.push({
-                text,
-                x,
-                y: i * LINE_HEIGHT,
-                width: ctx.measureText(text).width,
-                color: [...REST_COLOR],
-            });
+        columns = [];
+        for(let c = 0; c < colCount; c++){
+            const x = c * COLUMN_WIDTH + COLUMN_PADDING;
+            let nextLineIndex = c * 5; // stagger starting content so columns don't mirror each other
+            const speed = 6 + Math.random() * 6; // px/sec, upward — varies per column for an organic feel
+
+            const lines = [];
+            for(let r = 0; r < rowCount; r++){
+                const text = fitText(LINES[nextLineIndex % LINES.length], maxLineWidth);
+                nextLineIndex++;
+                lines.push({
+                    text,
+                    width: ctx.measureText(text).width,
+                    y: r * LINE_HEIGHT,
+                    color: [...REST_COLOR],
+                });
+            }
+
+            columns.push({ x, speed, nextLineIndex, lines });
         }
     }
 
@@ -290,8 +308,8 @@ function addHoverScale(els, hoverScale = 1.06){
         targetMouseY = e.clientY;
     });
 
-    function lineDistance(line){
-        const clampedX = Math.max(line.x, Math.min(mouseX, line.x + line.width));
+    function lineDistance(col, line){
+        const clampedX = Math.max(col.x, Math.min(mouseX, col.x + line.width));
         const dx = mouseX - clampedX;
         const dy = mouseY - line.y;
         return Math.sqrt(dx * dx + dy * dy);
@@ -301,9 +319,11 @@ function addHoverScale(els, hoverScale = 1.06){
 
     function drawStatic(){
         ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
-        for(const line of lines){
-            ctx.fillStyle = `rgba(${REST_COLOR.join(",")},.4)`;
-            ctx.fillText(line.text, line.x, line.y);
+        ctx.fillStyle = `rgba(${REST_COLOR.join(",")},.4)`;
+        for(const col of columns){
+            for(const line of col.lines){
+                ctx.fillText(line.text, col.x, line.y);
+            }
         }
     }
 
@@ -311,6 +331,8 @@ function addHoverScale(els, hoverScale = 1.06){
         drawStatic();
         return;
     }
+
+    const maxLineWidth = COLUMN_WIDTH - COLUMN_PADDING * 2;
 
     function loop(now){
         const dt = Math.min((now - lastTime) / 1000, 0.05);
@@ -321,33 +343,35 @@ function addHoverScale(els, hoverScale = 1.06){
 
         ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
 
-        for(const line of lines){
-            // Scroll upward continuously; wrap back to the bottom once a
-            // line exits the top, picking the next line in sequence so the
-            // feed reads as an endless running log rather than a loop.
-            line.y -= SCROLL_SPEED * dt;
-            if(line.y < -LINE_HEIGHT){
-                line.y += lines.length * LINE_HEIGHT;
-                line.text = LINES[nextLineIndex % LINES.length];
-                nextLineIndex++;
-                line.width = ctx.measureText(line.text).width;
+        for(const col of columns){
+            for(const line of col.lines){
+                // Scroll upward continuously; wrap back to the bottom once a
+                // line exits the top, picking the next line in this column's
+                // sequence so the feed reads as an endless running log.
+                line.y -= col.speed * dt;
+                if(line.y < -LINE_HEIGHT){
+                    line.y += col.lines.length * LINE_HEIGHT;
+                    line.text = fitText(LINES[col.nextLineIndex % LINES.length], maxLineWidth);
+                    col.nextLineIndex++;
+                    line.width = ctx.measureText(line.text).width;
+                }
+
+                const dist = lineDistance(col, line);
+                const influence = dist < INFLUENCE ? (1 - dist / INFLUENCE) ** 2 : 0;
+                const target = [
+                    lerp(REST_COLOR[0], GLOW_COLOR[0], influence),
+                    lerp(REST_COLOR[1], GLOW_COLOR[1], influence),
+                    lerp(REST_COLOR[2], GLOW_COLOR[2], influence),
+                ];
+
+                for(let c = 0; c < 3; c++){
+                    line.color[c] += (target[c] - line.color[c]) * EASE;
+                }
+
+                const opacity = lerp(0.28, 0.9, influence);
+                ctx.fillStyle = `rgba(${line.color.map(Math.round).join(",")},${opacity.toFixed(3)})`;
+                ctx.fillText(line.text, col.x, line.y);
             }
-
-            const dist = lineDistance(line);
-            const influence = dist < INFLUENCE ? (1 - dist / INFLUENCE) ** 2 : 0;
-            const target = [
-                lerp(REST_COLOR[0], GLOW_COLOR[0], influence),
-                lerp(REST_COLOR[1], GLOW_COLOR[1], influence),
-                lerp(REST_COLOR[2], GLOW_COLOR[2], influence),
-            ];
-
-            for(let c = 0; c < 3; c++){
-                line.color[c] += (target[c] - line.color[c]) * EASE;
-            }
-
-            const opacity = lerp(0.4, 0.95, influence);
-            ctx.fillStyle = `rgba(${line.color.map(Math.round).join(",")},${opacity.toFixed(3)})`;
-            ctx.fillText(line.text, line.x, line.y);
         }
 
         requestAnimationFrame(loop);

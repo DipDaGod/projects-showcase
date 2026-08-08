@@ -221,6 +221,7 @@ function addHoverScale(els, hoverScale = 1.06){
     if(!ctx) return;
 
     const LINES = [
+        // real-ish code / infra
         "const repos = await fetch(WORKER_BASE);",
         "git commit -m \"ship it\"",
         "npm run build",
@@ -239,6 +240,53 @@ function addHoverScale(els, hoverScale = 1.06){
         "export default { async fetch(request, env) {",
         "  return new Response(body, { headers });",
         "background-color: var(--bg);",
+        "git rebase -i HEAD~3",
+        "npx wrangler deploy",
+        "SELECT * FROM repos WHERE fork = false;",
+        "await env.STATS_KV.put(key, JSON.stringify(record));",
+        "$ dig logger.dhairyaplayz97.workers.dev",
+        "  animation: cardIn .5s cubic-bezier(.16,1,.3,1);",
+        "trace: mousemove -> requestAnimationFrame(loop)",
+
+        // classic dev humor
+        "// TODO: fix this before anyone sees it",
+        "it works on my machine ¯\\_(ツ)_/¯",
+        "rm -rf node_modules && npm i (again)",
+        "// this is temporary (2019)",
+        "git blame index.html -> it was me",
+        "$ sudo make me a sandwich",
+        "99 little bugs in the code, 99 bugs",
+        "take one down, patch it around",
+        "127 little bugs in the code...",
+        "// please don't refactor this. ever.",
+        "$ man life",
+        "No manual entry for life",
+        "commit: \"final final v2 REAL final\"",
+        "// I have no idea why this works",
+        "console.log('reached this point somehow');",
+        "$ git push --force",
+        "  ^ narrator: it was not fine",
+        "throw new Error(\"should never happen\");",
+        "// narrator: it happened",
+
+        // self-aware / meta
+        "// dipdagod was here",
+        "if (you.reading(this)) hire(me);",
+        "console.log('found the easter egg');",
+        "// this comment is load-bearing",
+        "loading portfolio... please clap",
+        "$ whoami",
+        "dipdagod",
+        "status: probably overengineered",
+        "// built at 2am, works surprisingly well",
+        "cat thoughts.txt | grep \"good idea\"",
+        "0 matches",
+
+        // ascii / flavor
+        "(╯°□°）╯︵ ┻━┻",
+        "٩(◕‿◕)۶",
+        "[■■■■■■■■□□] 80% vibes",
+        "> _",
     ];
 
     const LINE_HEIGHT = 24;

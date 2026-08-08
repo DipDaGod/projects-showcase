@@ -442,6 +442,28 @@ h1{ display:none; } /* replaced by terminal title */
     animation-delay:var(--card-delay, 0ms);
 }
 
+.card-glow{
+    position:absolute;
+    inset:0;
+    border-radius:inherit;
+    background:radial-gradient(220px circle at var(--mx, 50%) var(--my, 50%), rgba(126,231,135,.14), transparent 70%);
+    opacity:0;
+    transition:opacity .35s ease;
+    pointer-events:none;
+}
+
+.card:hover .card-glow{
+    opacity:1;
+}
+
+.card-featured .card-glow{
+    background:radial-gradient(220px circle at var(--mx, 50%) var(--my, 50%), rgba(210,153,34,.14), transparent 70%);
+}
+
+@media (prefers-reduced-motion: reduce){
+    .card-glow{ transition:opacity .15s ease; }
+}
+
 .card::before, .card::after{
     content:"";
     position:absolute;
@@ -517,7 +539,11 @@ h1{ display:none; } /* replaced by terminal title */
     transform:translateY(-3px);
     border-left-color:var(--purple);
     border-color:var(--border-hi);
-    box-shadow:0 14px 28px -18px rgba(0,0,0,.55);
+    box-shadow:0 14px 28px -18px rgba(0,0,0,.55), 0 0 26px -6px rgba(126,231,135,.28);
+}
+
+.card-featured:hover{
+    box-shadow:0 14px 28px -18px rgba(0,0,0,.55), 0 0 26px -6px rgba(210,153,34,.32);
 }
 
 .card:focus-within{

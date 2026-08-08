@@ -612,6 +612,8 @@ function render(repos, query = ""){
         return `
         <div class="card ${featured ? "card-featured" : ""}" style="--card-delay:${Math.min(i, 10) * 30}ms">
 
+            <div class="card-glow"></div>
+
             <div class="card-header">
                 <div class="name-row">
                     <span class="branch-icon">⌥</span>
@@ -697,6 +699,20 @@ function render(repos, query = ""){
         });
 
         addHoverScale(grid.querySelectorAll(".visit-site-btn, .github-link"), 1.06);
+    }
+
+    // Cursor-tracked glow spotlight — plain CSS custom properties, no Motion
+    // dependency, so this still works even if the CDN fails to load. Skipped
+    // under reduced motion; the CSS default (--mx/--my unset → 50% 50%)
+    // still lets the glow fade in centered on hover instead of tracking.
+    if(!prefersReducedMotion){
+        grid.querySelectorAll(".card").forEach(card => {
+            card.addEventListener("mousemove", e => {
+                const rect = card.getBoundingClientRect();
+                card.style.setProperty("--mx", `${e.clientX - rect.left}px`);
+                card.style.setProperty("--my", `${e.clientY - rect.top}px`);
+            });
+        });
     }
 
 }

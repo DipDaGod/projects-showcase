@@ -786,8 +786,6 @@ function render(repos, query = ""){
         return `
         <div class="card ${featured ? "card-featured" : ""}" style="--card-delay:${Math.min(i, 10) * 30}ms">
 
-            <div class="card-glow"></div>
-
             <div class="card-header">
                 <div class="name-row">
                     <span class="branch-icon">⌥</span>
@@ -873,21 +871,6 @@ function render(repos, query = ""){
         });
 
         addHoverScale(grid.querySelectorAll(".visit-site-btn, .github-link, .name"), 1.06);
-    }
-
-    // Cursor-tracked glow spotlight — plain CSS custom properties, no Motion
-    // dependency, so this still works even if the CDN fails to load. Skipped
-    // under reduced motion or on touch devices; the CSS default (--mx/--my
-    // unset → 50% 50%) still lets the glow fade in centered on tap instead
-    // of tracking a cursor that doesn't exist.
-    if(!prefersReducedMotion && !isTouchDevice){
-        grid.querySelectorAll(".card").forEach(card => {
-            card.addEventListener("mousemove", e => {
-                const rect = card.getBoundingClientRect();
-                card.style.setProperty("--mx", `${e.clientX - rect.left}px`);
-                card.style.setProperty("--my", `${e.clientY - rect.top}px`);
-            });
-        });
     }
 
 }
@@ -1029,9 +1012,9 @@ refreshBtn.addEventListener("click", () => {
 // -------------------------
 // Initial load — paints whatever's cached immediately for a fast load.
 // If that cache is under a day old, that's it, nothing else happens (no
-// network call on reload). If it's stale (>24h), a real fetch fires
-// automatically right after, same as hitting pull — the cached view is
-// just what's shown while that happens.
+// network call on reload). If there's no cache at all, or what's cached is
+// stale (>24h), a real fetch fires automatically right away, same as
+// hitting pull — nothing is ever left showing a blank "hit pull" state.
 // -------------------------
 (function loadFromCache(){
     const cache = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
@@ -1052,16 +1035,8 @@ refreshBtn.addEventListener("click", () => {
             fetchRepos(); // stale — refresh automatically instead of waiting for a manual pull
         }
     } else {
-        subtitle.textContent = "no cached data yet";
-        status.textContent = "hit pull to load repositories";
-        clearLangSections();
-        grid.innerHTML = `
-            <div class="empty">
-                <span>no data yet</span>
-                <button class="cta-btn" id="empty-pull">⟳ pull now</button>
-            </div>
-        `;
-        document.getElementById("empty-pull").addEventListener("click", fetchRepos);
-        addHoverScale([document.getElementById("empty-pull")], 1.06);
+        subtitle.textContent = "no cache — pulling fresh...";
+        status.textContent = "first load, fetching repositories";
+        fetchRepos(); // no cache at all — pull automatically instead of waiting for a manual click
     }
 })();

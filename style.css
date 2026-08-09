@@ -295,16 +295,11 @@ h1{ display:none; } /* replaced by terminal title */
     box-shadow:0 0 16px -4px rgba(210,153,34,.4);
 }
 
-/* ---------- stats bar ---------- */
-/* ---------- meta panel (stats + language bar + chips) ---------- */
+/* ---------- meta panel (stats + language bar + chips) — lives inside .term now ---------- */
 #meta-panel{
-    max-width:1000px;
-    margin:0 auto 28px;
-    background:var(--term);
-    border:1px solid var(--border);
-    border-radius:10px;
-    padding:20px 22px;
-    box-shadow:0 20px 44px -24px rgba(0,0,0,.55);
+    margin-top:20px;
+    padding-top:20px;
+    border-top:1px solid var(--border);
     display:flex;
     flex-direction:column;
     gap:18px;
@@ -494,7 +489,7 @@ h1{ display:none; } /* replaced by terminal title */
     border-color:var(--green);
 }
 
-.name:focus-visible, .visit-site-btn:focus-visible, .github-link:focus-visible, #refresh:focus-visible, .cta-btn:focus-visible{
+.name:focus-visible, .visit-site-btn:focus-visible, .github-link:focus-visible, #refresh:focus-visible{
     outline:2px solid var(--green);
     outline-offset:2px;
 }
@@ -716,25 +711,6 @@ h1{ display:none; } /* replaced by terminal title */
     gap:14px;
 }
 
-.cta-btn{
-    padding:9px 18px;
-    border:1px solid var(--border-hi);
-    border-radius:7px;
-    background:rgba(63,185,80,.08);
-    color:var(--green);
-    font-family:var(--mono);
-    font-size:.82rem;
-    font-weight:500;
-    cursor:pointer;
-    transition:border-color .15s, background .15s, box-shadow .2s ease;
-}
-
-.cta-btn:hover{
-    border-color:var(--green);
-    background:rgba(63,185,80,.16);
-    box-shadow:0 0 20px -4px rgba(63,185,80,.5);
-}
-
 /* ---------- footer status ---------- */
 #status-row{
     max-width:1000px;
@@ -832,7 +808,8 @@ h1{ display:none; } /* replaced by terminal title */
     }
 
     #meta-panel{
-        padding:16px;
+        margin-top:16px;
+        padding-top:16px;
         gap:14px;
     }
 
@@ -897,7 +874,7 @@ h1{ display:none; } /* replaced by terminal title */
     }
 
     /* Comfortable tap targets (~44px) on the controls people actually tap. */
-    #refresh, .visit-site-btn, .github-link, .cta-btn, #sort{
+    #refresh, .visit-site-btn, .github-link, #sort{
         min-height:44px;
     }
 }

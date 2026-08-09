@@ -632,12 +632,6 @@ function renderLangSections(repos){
     renderLangChips(repos, breakdown);
 }
 
-function clearLangSections(){
-    statsBar.innerHTML = "";
-    langBar.innerHTML = "";
-    langChips.innerHTML = "";
-}
-
 // -------------------------
 // Refresh button state
 // -------------------------
@@ -853,9 +847,7 @@ function render(repos, query = ""){
 
             <div class="meta">
                 ${repo.stargazers_count > 0 ? `<span>★ ${repo.stargazers_count}</span>` : ""}
-                <span>
-                    ${new Date(repo.pushed_at).toLocaleDateString()}
-                </span>
+                <span>created ${timeAgo(repo.created_at)}</span>
             </div>
 
         </div>
@@ -902,6 +894,29 @@ function highlightMatch(name, query){
     const after = escapeHtml(name.slice(idx + query.length));
 
     return `${before}<mark>${match}</mark>${after}`;
+}
+
+// Relative time using exactly one unit (days, months, or years — whichever
+// is most sensible), rounded to the nearest whole number rather than
+// showing a raw date like "8/9/2026".
+function timeAgo(dateStr){
+    const diffDays = (Date.now() - new Date(dateStr)) / (1000 * 60 * 60 * 24);
+
+    if(diffDays < 1) return "today";
+
+    if(diffDays < 30){
+        const days = Math.round(diffDays);
+        return `${days} day${days === 1 ? "" : "s"} ago`;
+    }
+
+    const diffMonths = diffDays / 30.44; // average month length
+    if(diffMonths < 12){
+        const months = Math.round(diffMonths);
+        return `${months} month${months === 1 ? "" : "s"} ago`;
+    }
+
+    const years = Math.round(diffDays / 365.25);
+    return `${years} year${years === 1 ? "" : "s"} ago`;
 }
 
 // -------------------------

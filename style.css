@@ -69,6 +69,10 @@ a{ color:inherit; }
     will-change:transform;
 }
 
+@media (hover:none), (pointer:coarse){
+    #bg-glow{ display:none; }
+}
+
 @media (prefers-reduced-motion: reduce){
     #bg-glow{ display:none; }
 }
@@ -829,4 +833,80 @@ h1{ display:none; } /* replaced by terminal title */
     font-size:.74rem;
     min-width:20px;
     text-align:center;
+}
+
+/* ---------- mobile ---------- */
+@media (max-width: 640px){
+    body{
+        padding:28px 14px 44px;
+    }
+
+    .term-body{
+        padding:16px 16px 14px;
+    }
+
+    .term-title{
+        font-size:.7rem;
+    }
+
+    .prompt-line{
+        font-size:.82rem;
+    }
+
+    /* Filter, sort, and pull stack full-width instead of squeezing into
+       one cramped row — each becomes a comfortably tappable target. */
+    .controls{
+        flex-direction:column;
+        align-items:stretch;
+    }
+
+    .filter-wrap, #sort, #refresh{
+        width:100%;
+    }
+
+    #refresh{
+        justify-content:center;
+    }
+
+    /* The desktop expand-on-focus (flex-basis: 420px) would overflow a
+       narrow viewport since the wrap is already full-width here. */
+    .filter-wrap, .filter-wrap:focus-within{
+        flex-basis:auto;
+    }
+
+    /* One column reads far better than a cramped auto-fill grid squeezing
+       a 280px-min card into ~290px of actual available width. */
+    #grid{
+        grid-template-columns:1fr;
+    }
+
+    /* auto-fit could collapse to a single column at this width depending
+       on exact viewport size — force a tidy 2x2 instead of leaving it to
+       chance. */
+    #stats-bar{
+        grid-template-columns:repeat(2, 1fr);
+    }
+
+    .stat-value{
+        font-size:1.25rem;
+    }
+
+    /* A pinned 220px corner box can run off-screen on a narrow phone —
+       becomes a full-width sheet anchored to the bottom instead. */
+    #help-panel{
+        left:14px;
+        right:14px;
+        bottom:14px;
+        min-width:auto;
+    }
+
+    #status-row{
+        flex-wrap:wrap;
+        row-gap:8px;
+    }
+
+    /* Comfortable tap targets (~44px) on the controls people actually tap. */
+    #refresh, .visit-site-btn, .github-link, .cta-btn, #sort{
+        min-height:44px;
+    }
 }

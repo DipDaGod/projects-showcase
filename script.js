@@ -37,6 +37,13 @@ const PAGE_LOAD_TIME = Date.now();
 
 const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+// Coarse-pointer / no-hover devices (phones, tablets) can't meaningfully
+// interact with cursor-tracking effects — mousemove either never fires or
+// fires once per tap. Running a continuous rAF loop for an effect that
+// never actually reacts to anything is pure wasted battery/CPU, so these
+// are skipped entirely on such devices rather than just left to idle.
+const isTouchDevice = window.matchMedia("(hover: none), (pointer: coarse)").matches;
+
 // Motion (https://motion.dev) is loaded via CDN in index.html. If it fails
 // to load — blocked CDN, offline, whatever — motionAnimate stays null and
 // every spring-hover call below just no-ops, falling back to the plain CSS
@@ -65,7 +72,7 @@ function addHoverScale(els, hoverScale = 1.06){
 // rAF-throttled so rapid mousemove events don't queue up redundant work.
 // -------------------------
 (function initBackgroundMotion(){
-    if(!motionAnimate || prefersReducedMotion) return;
+    if(!motionAnimate || prefersReducedMotion || isTouchDevice) return;
 
     const glowRadius = 380; // half of #bg-glow's 760px width/height, for centering
 
@@ -192,7 +199,7 @@ function addHoverScale(els, hoverScale = 1.06){
         }
     }
 
-    if(prefersReducedMotion){
+    if(prefersReducedMotion || isTouchDevice){
         drawFrame(false); // static, undistorted grid — no cursor tracking, no rAF loop
         return;
     }
@@ -375,7 +382,7 @@ function addHoverScale(els, hoverScale = 1.06){
         }
     }
 
-    if(prefersReducedMotion){
+    if(prefersReducedMotion || isTouchDevice){
         drawStatic();
         return;
     }
@@ -870,9 +877,10 @@ function render(repos, query = ""){
 
     // Cursor-tracked glow spotlight — plain CSS custom properties, no Motion
     // dependency, so this still works even if the CDN fails to load. Skipped
-    // under reduced motion; the CSS default (--mx/--my unset → 50% 50%)
-    // still lets the glow fade in centered on hover instead of tracking.
-    if(!prefersReducedMotion){
+    // under reduced motion or on touch devices; the CSS default (--mx/--my
+    // unset → 50% 50%) still lets the glow fade in centered on tap instead
+    // of tracking a cursor that doesn't exist.
+    if(!prefersReducedMotion && !isTouchDevice){
         grid.querySelectorAll(".card").forEach(card => {
             card.addEventListener("mousemove", e => {
                 const rect = card.getBoundingClientRect();

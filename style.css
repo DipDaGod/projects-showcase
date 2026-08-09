@@ -701,7 +701,10 @@ h1{ display:none; } /* replaced by terminal title */
 .empty{
     grid-column:1 / -1;
     text-align:center;
-    padding:38px 10px;
+    padding:48px 24px;
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:10px;
     color:var(--muted-dim);
     font-family:var(--mono);
     font-size:.85rem;
@@ -717,12 +720,16 @@ h1{ display:none; } /* replaced by terminal title */
     margin:24px auto 0;
     display:flex;
     align-items:center;
-    gap:16px;
+    gap:12px;
     font-family:var(--mono);
     font-size:.76rem;
 }
 
 #status{
+    background:rgba(255,255,255,.03);
+    border:1px solid var(--border);
+    border-radius:6px;
+    padding:6px 12px;
     color:var(--muted-dim);
     flex:1;
 }
@@ -730,6 +737,10 @@ h1{ display:none; } /* replaced by terminal title */
 #status::before{ content:"// "; }
 
 #uptime{
+    background:rgba(255,255,255,.03);
+    border:1px solid var(--border);
+    border-radius:6px;
+    padding:6px 12px;
     color:var(--muted-dim);
     white-space:nowrap;
 }

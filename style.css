@@ -296,16 +296,28 @@ h1{ display:none; } /* replaced by terminal title */
 }
 
 /* ---------- stats bar ---------- */
-#stats-bar{
+/* ---------- meta panel (stats + language bar + chips) ---------- */
+#meta-panel{
     max-width:1000px;
-    margin:0 auto 22px;
+    margin:0 auto 28px;
+    background:var(--term);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:20px 22px;
+    box-shadow:0 20px 44px -24px rgba(0,0,0,.55);
+    display:flex;
+    flex-direction:column;
+    gap:18px;
+}
+
+#stats-bar{
     display:grid;
     grid-template-columns:repeat(auto-fit, minmax(140px, 1fr));
     gap:12px;
 }
 
 .stat-box{
-    background:var(--term);
+    background:var(--card);
     border:1px solid var(--border);
     border-radius:9px;
     padding:14px 16px;
@@ -334,8 +346,6 @@ h1{ display:none; } /* replaced by terminal title */
 
 /* ---------- language chips ---------- */
 #lang-chips{
-    max-width:1000px;
-    margin:0 auto 22px;
     display:flex;
     flex-wrap:wrap;
     gap:8px;
@@ -345,7 +355,7 @@ h1{ display:none; } /* replaced by terminal title */
     padding:6px 13px;
     border-radius:99px;
     border:1px solid var(--border);
-    background:var(--term);
+    background:var(--card);
     color:var(--muted);
     font-family:var(--mono);
     font-size:.76rem;
@@ -378,8 +388,6 @@ h1{ display:none; } /* replaced by terminal title */
 
 /* ---------- language bar ---------- */
 #lang-bar{
-    max-width:1000px;
-    margin:0 auto 22px;
     height:8px;
     border-radius:5px;
     overflow:hidden;
@@ -821,6 +829,11 @@ h1{ display:none; } /* replaced by terminal title */
 
     .term-body{
         padding:16px 16px 14px;
+    }
+
+    #meta-panel{
+        padding:16px;
+        gap:14px;
     }
 
     .term-title{

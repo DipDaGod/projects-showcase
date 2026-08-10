@@ -42,11 +42,17 @@
                 <input id="filter" placeholder="filter repos... ( / )">
                 <button id="filter-clear" aria-label="Clear filter" type="button">✕</button>
             </div>
-            <select id="sort" aria-label="Sort repositories">
-                <option value="updated">recently updated</option>
-                <option value="stars">most stars</option>
-                <option value="name">name</option>
-            </select>
+            <div class="sort-dropdown" id="sort-dropdown">
+                <button class="sort-toggle" id="sort-toggle" type="button" aria-haspopup="listbox" aria-expanded="false">
+                    <span class="sort-toggle-label">recently updated</span>
+                    <span class="sort-chevron">⌄</span>
+                </button>
+                <ul class="sort-menu" id="sort-menu" role="listbox" aria-label="Sort repositories">
+                    <li class="sort-option active" role="option" tabindex="-1" data-value="updated" aria-selected="true">recently updated</li>
+                    <li class="sort-option" role="option" tabindex="-1" data-value="stars" aria-selected="false">most stars</li>
+                    <li class="sort-option" role="option" tabindex="-1" data-value="name" aria-selected="false">name</li>
+                </ul>
+            </div>
             <button id="refresh"><span class="icon">⟳</span><span class="label">pull</span></button>
         </div>
 

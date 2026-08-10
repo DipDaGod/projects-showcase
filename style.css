@@ -32,7 +32,7 @@ body{
 
 a{ color:inherit; }
 
-/* ---------- ambient background ---------- */
+/* ambient background */
 #ascii-flow{
     position:fixed;
     inset:0;
@@ -77,7 +77,7 @@ a{ color:inherit; }
     #bg-glow{ display:none; }
 }
 
-/* ---------- terminal window ---------- */
+/* terminal window */
 .term{
     max-width:1000px;
     margin:0 auto 34px;
@@ -139,7 +139,7 @@ a{ color:inherit; }
 
 h1{ display:none; } /* replaced by terminal title */
 
-/* ---------- controls ---------- */
+/* controls */
 .controls{
     display:flex;
     gap:10px;
@@ -275,9 +275,18 @@ h1{ display:none; } /* replaced by terminal title */
     #refresh.loading .icon{ animation:none; }
 }
 
-/* ---------- sort dropdown ---------- */
-#sort{
+/* sort dropdown (custom — native <select> can't be styled when open) */
+.sort-dropdown{
+    position:relative;
+}
+
+.sort-toggle{
+    display:inline-flex;
+    align-items:center;
+    gap:10px;
+    height:100%;
     padding:0 12px;
+    min-height:40px;
     border:1px solid var(--border);
     border-radius:7px;
     background:rgba(255,255,255,.03);
@@ -285,17 +294,78 @@ h1{ display:none; } /* replaced by terminal title */
     font-family:var(--mono);
     font-size:.82rem;
     cursor:pointer;
-    outline:none;
     transition:border-color .15s, box-shadow .2s ease, background .15s;
 }
 
-#sort:hover, #sort:focus-visible{
+.sort-toggle:hover, .sort-toggle.open{
     border-color:var(--yellow);
     background:rgba(210,153,34,.08);
     box-shadow:0 0 16px -4px rgba(210,153,34,.4);
 }
 
-/* ---------- meta panel (stats + language bar + chips) — lives inside .term now ---------- */
+.sort-chevron{
+    color:var(--muted-dim);
+    font-size:.7rem;
+    transition:transform .2s cubic-bezier(.16,1,.3,1);
+}
+
+.sort-toggle.open .sort-chevron{
+    transform:rotate(180deg);
+}
+
+.sort-menu{
+    position:absolute;
+    top:calc(100% + 8px);
+    left:0;
+    min-width:100%;
+    background:var(--card);
+    border:1px solid var(--border-hi);
+    border-radius:8px;
+    box-shadow:0 20px 44px -20px rgba(0,0,0,.7);
+    list-style:none;
+    margin:0;
+    padding:6px;
+    z-index:50;
+    opacity:0;
+    transform:translateY(-6px) scale(.98);
+    pointer-events:none;
+    transition:opacity .18s ease, transform .18s cubic-bezier(.16,1,.3,1);
+}
+
+.sort-menu.open{
+    opacity:1;
+    transform:translateY(0) scale(1);
+    pointer-events:auto;
+}
+
+.sort-option{
+    padding:8px 12px;
+    border-radius:5px;
+    font-family:var(--mono);
+    font-size:.82rem;
+    color:var(--muted);
+    cursor:pointer;
+    white-space:nowrap;
+    transition:background .12s ease, color .12s ease;
+}
+
+.sort-option:hover, .sort-option:focus{
+    background:rgba(255,255,255,.06);
+    color:var(--text);
+    outline:none;
+}
+
+.sort-option.active{
+    color:var(--yellow);
+    background:rgba(210,153,34,.1);
+}
+
+@media (prefers-reduced-motion: reduce){
+    .sort-menu{ transition:opacity .1s ease; }
+    .sort-chevron{ transition:none; }
+}
+
+/* meta panel (stats + language bar + chips) — lives inside .term now */
 #meta-panel{
     margin-top:20px;
     padding-top:20px;
@@ -339,7 +409,7 @@ h1{ display:none; } /* replaced by terminal title */
     color:var(--muted-dim);
 }
 
-/* ---------- language chips ---------- */
+/* language chips */
 #lang-chips{
     display:flex;
     flex-wrap:wrap;
@@ -381,7 +451,7 @@ h1{ display:none; } /* replaced by terminal title */
     .chip.active{ transform:none; }
 }
 
-/* ---------- language bar ---------- */
+/* language bar */
 #lang-bar{
     height:8px;
     border-radius:5px;
@@ -400,7 +470,7 @@ h1{ display:none; } /* replaced by terminal title */
     .lang-bar-seg{ transition:none; }
 }
 
-/* ---------- grid ---------- */
+/* grid */
 #grid{
     max-width:1000px;
     margin:auto;
@@ -679,7 +749,7 @@ h1{ display:none; } /* replaced by terminal title */
 
 .meta span{ display:inline-flex; align-items:center; }
 
-/* ---------- empty / error ---------- */
+/* empty / error */
 .card.notice{
     grid-column:1 / -1;
     border-color:var(--red);
@@ -714,7 +784,7 @@ h1{ display:none; } /* replaced by terminal title */
     gap:14px;
 }
 
-/* ---------- footer status ---------- */
+/* footer status */
 #status-row{
     max-width:1000px;
     margin:24px auto 0;
@@ -765,7 +835,7 @@ h1{ display:none; } /* replaced by terminal title */
     box-shadow:0 0 14px -4px rgba(210,153,34,.4);
 }
 
-/* ---------- help panel ---------- */
+/* help panel */
 #help-panel{
     position:fixed;
     right:20px;
@@ -808,7 +878,7 @@ h1{ display:none; } /* replaced by terminal title */
     text-align:center;
 }
 
-/* ---------- mobile ---------- */
+/* mobile */
 @media (max-width: 640px){
     body{
         padding:28px 14px 44px;
@@ -839,8 +909,13 @@ h1{ display:none; } /* replaced by terminal title */
         align-items:stretch;
     }
 
-    .filter-wrap, #sort, #refresh{
+    .filter-wrap, .sort-dropdown, #refresh{
         width:100%;
+    }
+
+    .sort-toggle{
+        width:100%;
+        justify-content:space-between;
     }
 
     #refresh{
@@ -885,7 +960,7 @@ h1{ display:none; } /* replaced by terminal title */
     }
 
     /* Comfortable tap targets (~44px) on the controls people actually tap. */
-    #refresh, .visit-site-btn, .github-link, #sort{
+    #refresh, .visit-site-btn, .github-link, .sort-toggle{
         min-height:44px;
     }
 }

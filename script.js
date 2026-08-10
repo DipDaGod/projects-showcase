@@ -26,7 +26,9 @@ const helpToggle = document.getElementById("help-toggle");
 const statsBar = document.getElementById("stats-bar");
 const langBar = document.getElementById("lang-bar");
 const langChips = document.getElementById("lang-chips");
-const sortSelect = document.getElementById("sort");
+const sortDropdown = document.getElementById("sort-dropdown");
+const sortToggle = document.getElementById("sort-toggle");
+const sortMenu = document.getElementById("sort-menu");
 const bgGlow = document.getElementById("bg-glow");
 
 let allRepos = [];
@@ -37,17 +39,10 @@ const PAGE_LOAD_TIME = Date.now();
 
 const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-// Coarse-pointer / no-hover devices (phones, tablets) can't meaningfully
-// interact with cursor-tracking effects — mousemove either never fires or
-// fires once per tap. Running a continuous rAF loop for an effect that
-// never actually reacts to anything is pure wasted battery/CPU, so these
-// are skipped entirely on such devices rather than just left to idle.
+// Touch/no-hover devices get no benefit from cursor-tracking effects — skip them entirely instead of running rAF loops for nothing.
 const isTouchDevice = window.matchMedia("(hover: none), (pointer: coarse)").matches;
 
-// Motion (https://motion.dev) is loaded via CDN in index.html. If it fails
-// to load — blocked CDN, offline, whatever — motionAnimate stays null and
-// every spring-hover call below just no-ops, falling back to the plain CSS
-// hover states already defined in style.css. Nothing breaks either way.
+// Motion (motion.dev) loads via CDN in index.html. If it fails, motionAnimate stays null and every spring call below just no-ops — CSS :hover still works.
 const motionAnimate = (typeof Motion !== "undefined" && Motion.animate) || null;
 
 // Spring-animates el to `props` if Motion loaded; otherwise does nothing
@@ -67,10 +62,7 @@ function addHoverScale(els, hoverScale = 1.06){
     });
 }
 
-// -------------------------
-// Ambient background — cursor-following glow.
-// rAF-throttled so rapid mousemove events don't queue up redundant work.
-// -------------------------
+// Ambient background — cursor-following glow, rAF-throttled.
 (function initBackgroundMotion(){
     if(!motionAnimate || prefersReducedMotion || isTouchDevice) return;
 
@@ -100,14 +92,7 @@ function addHoverScale(els, hoverScale = 1.06){
     });
 })();
 
-// -------------------------
-// ASCII flow field — a grid of glyphs that bend to face the cursor and
-// brighten the closer they are to it, then ease back to resting rotation/
-// opacity as the cursor moves away. Runs on canvas (not per-glyph DOM
-// nodes) since there are hundreds of cells on a typical viewport and this
-// needs to redraw every frame regardless of mouse activity for the ease-out
-// to look smooth once the cursor stops moving.
-// -------------------------
+// ASCII flow field — glyphs bend toward the cursor and ease back. Canvas-based (not per-glyph DOM) for perf across hundreds of cells.
 (function initAsciiFlowField(){
     const canvas = document.getElementById("ascii-flow");
     const ctx = canvas && canvas.getContext("2d");
@@ -214,14 +199,7 @@ function addHoverScale(els, hoverScale = 1.06){
     requestAnimationFrame(loop);
 })();
 
-// -------------------------
-// Running code background — several columns of a scrolling fake terminal/
-// code feed, spanning the entire page. Each line eases from a dim resting
-// color toward light green the closer the cursor gets to it, then eases
-// back — same interaction language as the ASCII flow field, just applied
-// to real text instead of glyphs. Each column scrolls independently (own
-// speed, own starting content) so it doesn't read as one texture repeated.
-// -------------------------
+// Running code background — several columns of scrolling fake code, brightening toward green near the cursor. Each column has its own speed/content offset.
 (function initCodeBackground(){
     const canvas = document.getElementById("code-bg");
     const ctx = canvas && canvas.getContext("2d");
@@ -456,9 +434,7 @@ function animateNumber(target, render, duration = 700){
     requestAnimationFrame(tick);
 }
 
-// -------------------------
 // Live uptime ticker — genuine time-since-page-load, not decorative fluff
-// -------------------------
 function tickUptime(){
     const secs = Math.floor((Date.now() - PAGE_LOAD_TIME) / 1000);
     const m = String(Math.floor(secs / 60)).padStart(2, "0");
@@ -469,9 +445,7 @@ function tickUptime(){
 tickUptime();
 setInterval(tickUptime, 1000);
 
-// -------------------------
 // Help panel ("?" toggles, matches the man-page vibe)
-// -------------------------
 function setHelpVisible(visible){
     helpPanel.hidden = !visible;
 }
@@ -479,9 +453,7 @@ function setHelpVisible(visible){
 helpToggle.addEventListener("click", () => setHelpVisible(helpPanel.hidden));
 addHoverScale([refreshBtn, helpToggle], 1.06);
 
-// -------------------------
 // Language colors (subset of GitHub's linguist palette)
-// -------------------------
 const LANG_COLORS = {
     JavaScript:"#F7DF1E", TypeScript:"#3178C6", Python:"#3572A5",
     HTML:"#E34F26", CSS:"#563D7C", Shell:"#89e051", Java:"#b07219",
@@ -501,11 +473,7 @@ function langColor(lang, fallback = "#8b949e"){
     return LANG_COLORS_LC[String(lang).toLowerCase()] ?? fallback;
 }
 
-// -------------------------
-// Single source of truth for per-language counts — the stats bar, the
-// language bar, and the filter chips all read from this instead of each
-// looping the repo list themselves.
-// -------------------------
+// Single source of truth for per-language counts — stats bar, language bar, and filter chips all read from this instead of each looping repos themselves.
 function getLangBreakdown(repos){
     const counts = {};
     let total = 0;
@@ -522,10 +490,7 @@ function getLangBreakdown(repos){
     return { counts, entries, total };
 }
 
-// -------------------------
-// Stats bar — computed off the full repo set, not the filtered view.
-// Repo count and star count animate up rather than snapping to place.
-// -------------------------
+// Stats bar — off the full repo set, not the filtered view. Repo/star counts animate up.
 function renderStatsBar(repos, breakdown){
     const totalStars = repos.reduce((sum, r) => sum + r.stargazers_count, 0);
     const topLang = breakdown.entries[0]?.[0] ?? "—";
@@ -556,9 +521,7 @@ function renderStatsBar(repos, breakdown){
     animateNumber(totalStars, n => starsEl.textContent = `★ ${n}`);
 }
 
-// -------------------------
 // Language distribution bar — fills left to right on render, GitHub-style.
-// -------------------------
 function renderLangBar(breakdown){
     if(breakdown.total === 0){
         langBar.innerHTML = "";
@@ -579,9 +542,7 @@ function renderLangBar(breakdown){
     });
 }
 
-// -------------------------
 // Language filter chips
-// -------------------------
 function renderLangChips(repos, breakdown){
     if(activeLanguage && !breakdown.counts[activeLanguage]){
         activeLanguage = null; // previously active language no longer present (e.g. after a fresh pull)
@@ -632,9 +593,7 @@ function renderLangSections(repos){
     renderLangChips(repos, breakdown);
 }
 
-// -------------------------
 // Refresh button state
-// -------------------------
 function setButtonState(state){
     refreshBtn.classList.remove("loading", "success", "error");
 
@@ -654,11 +613,7 @@ function setButtonState(state){
     }
 }
 
-// -------------------------
-// Fetch repositories — every click hits the network for real. The worker
-// enforces the actual rate limit; if it 429s us, we just settle the button
-// back to normal with no error — nothing to fake client-side anymore.
-// -------------------------
+// Every click hits the network for real — the worker enforces the actual rate limit; a 429 just settles the button with no error shown.
 async function fetchRepos(){
 
     setButtonState("loading");
@@ -742,9 +697,7 @@ async function fetchRepos(){
     }
 }
 
-// -------------------------
 // Skeleton placeholders (shown while loading with no existing data yet)
-// -------------------------
 function renderSkeleton(count = 6){
     grid.innerHTML = Array.from({ length: count }).map(() => `
         <div class="skeleton">
@@ -756,9 +709,7 @@ function renderSkeleton(count = 6){
     `).join("");
 }
 
-// -------------------------
 // Render
-// -------------------------
 function render(repos, query = ""){
 
     if(repos.length === 0){
@@ -867,9 +818,7 @@ function render(repos, query = ""){
 
 }
 
-// -------------------------
 // Escape HTML
-// -------------------------
 function escapeHtml(str){
 
     return String(str).replace(/[&<>"']/g, m => ({
@@ -919,17 +868,13 @@ function timeAgo(dateStr){
     return `${years} year${years === 1 ? "" : "s"} ago`;
 }
 
-// -------------------------
 // Filter
-// -------------------------
 const filterInput = document.getElementById("filter");
 const filterClear = document.getElementById("filter-clear");
 
 let filterDebounce;
 
-// -------------------------
 // Sort + filter pipeline
-// -------------------------
 function getVisibleRepos(){
     let repos = [...allRepos];
 
@@ -974,10 +919,72 @@ function applyFilter(){
     render(getVisibleRepos(), raw);
 }
 
-sortSelect.addEventListener("change", () => {
-    currentSort = sortSelect.value;
+// Sort dropdown (custom) — open/close, selection, click-outside, keyboard nav
+const sortToggleLabel = sortToggle.querySelector(".sort-toggle-label");
+const sortOptions = Array.from(sortMenu.querySelectorAll(".sort-option"));
+
+function setSortOpen(open){
+    sortMenu.classList.toggle("open", open);
+    sortToggle.classList.toggle("open", open);
+    sortToggle.setAttribute("aria-expanded", open ? "true" : "false");
+
+    if(open){
+        (sortOptions.find(o => o.classList.contains("active")) || sortOptions[0]).focus();
+    }
+}
+
+function selectSort(value){
+    currentSort = value;
+
+    sortOptions.forEach(opt => {
+        const isActive = opt.dataset.value === value;
+        opt.classList.toggle("active", isActive);
+        opt.setAttribute("aria-selected", isActive ? "true" : "false");
+        if(isActive) sortToggleLabel.textContent = opt.textContent.trim();
+    });
+
     applyFilter();
+}
+
+sortToggle.addEventListener("click", () => {
+    setSortOpen(!sortMenu.classList.contains("open"));
 });
+
+sortOptions.forEach(opt => {
+    opt.addEventListener("click", () => {
+        selectSort(opt.dataset.value);
+        setSortOpen(false);
+        sortToggle.focus();
+    });
+});
+
+document.addEventListener("click", e => {
+    if(!sortDropdown.contains(e.target)){
+        setSortOpen(false);
+    }
+});
+
+sortMenu.addEventListener("keydown", e => {
+    const idx = sortOptions.indexOf(document.activeElement);
+
+    if(e.key === "ArrowDown"){
+        e.preventDefault();
+        (sortOptions[idx + 1] || sortOptions[0]).focus();
+    } else if(e.key === "ArrowUp"){
+        e.preventDefault();
+        (sortOptions[idx - 1] || sortOptions[sortOptions.length - 1]).focus();
+    } else if(e.key === "Enter" || e.key === " "){
+        e.preventDefault();
+        selectSort(document.activeElement.dataset.value);
+        setSortOpen(false);
+        sortToggle.focus();
+    } else if(e.key === "Escape"){
+        setSortOpen(false);
+        sortToggle.focus();
+    }
+});
+
+addHoverScale([sortToggle], 1.03);
 
 filterInput.addEventListener("input", () => {
     clearTimeout(filterDebounce);
@@ -1017,20 +1024,12 @@ document.addEventListener("keydown", e => {
     }
 });
 
-// -------------------------
 // Refresh button
-// -------------------------
 refreshBtn.addEventListener("click", () => {
     fetchRepos();
 });
 
-// -------------------------
-// Initial load — paints whatever's cached immediately for a fast load.
-// If that cache is under a day old, that's it, nothing else happens (no
-// network call on reload). If there's no cache at all, or what's cached is
-// stale (>24h), a real fetch fires automatically right away, same as
-// hitting pull — nothing is ever left showing a blank "hit pull" state.
-// -------------------------
+// Paints cached data instantly. Fresh (<24h) cache = no network call. No cache, or stale cache, triggers an automatic fetch — nothing is ever left blank.
 (function loadFromCache(){
     const cache = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
     const ONE_DAY_MS = 24 * 60 * 60 * 1000;

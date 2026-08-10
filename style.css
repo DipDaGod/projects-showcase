@@ -753,6 +753,12 @@ h1{ display:none; } /* replaced by terminal title */
     font-size:.76rem;
 }
 
+.meta-created{
+    flex-basis:100%;
+    font-size:.7rem;
+    color:var(--muted-dim);
+}
+
 .lang-dot{
     width:8px;
     height:8px;

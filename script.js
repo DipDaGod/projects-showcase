@@ -500,10 +500,16 @@ function renderStatsBar(repos, breakdown){
             <span class="stat-value" id="stat-repos">0</span>
             <span class="stat-label">public repositories</span>
         </div>
-        <div class="stat-box">
-            <span class="stat-value accent" id="stat-stars">★ 0</span>
-            <span class="stat-label">total stars</span>
-        </div>
+        ${
+            totalStars > 0
+                ? `
+                <div class="stat-box">
+                    <span class="stat-value accent" id="stat-stars">★ 0</span>
+                    <span class="stat-label">total stars</span>
+                </div>
+                `
+                : ""
+        }
         <div class="stat-box">
             <span class="stat-value">${breakdown.entries.length}</span>
             <span class="stat-label">languages</span>
@@ -518,7 +524,7 @@ function renderStatsBar(repos, breakdown){
     const starsEl = document.getElementById("stat-stars");
 
     animateNumber(repos.length, n => reposEl.textContent = n);
-    animateNumber(totalStars, n => starsEl.textContent = `★ ${n}`);
+    if(starsEl) animateNumber(totalStars, n => starsEl.textContent = `★ ${n}`);
 }
 
 // Language distribution bar — fills left to right on render, GitHub-style.
@@ -804,7 +810,7 @@ function render(repos, query = ""){
             <div class="meta">
                 ${repo.stargazers_count > 0 ? `<span>★ ${repo.stargazers_count}</span>` : ""}
                 <span>updated ${timeAgo(repo.pushed_at)}</span>
-                <span style="margin-left:auto;">created on: ${new Date(repo.created_at).toLocaleDateString()}</span>
+                <span class="meta-created">created on: ${new Date(repo.created_at).toLocaleDateString()}</span>
             </div>
 
         </div>

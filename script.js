@@ -726,7 +726,12 @@ function render(repos, query = ""){
         const tags = topics.filter(t => t !== "featured");
         if(tags.length === 0 && repo.language) tags.push(repo.language);
 
-        const previewSrc = repo.ogImage || `https://opengraph.githubassets.com/1/${USERNAME}/${repo.name}`;
+        // Two-stage image fallback: try the site's own OG image first (if the
+        // worker resolved one). If THAT specific image fails to load — site
+        // redesigned, image moved, whatever — retry once with GitHub's own
+        // repo preview image before giving up and removing the block.
+        const fallbackSrc = `https://opengraph.githubassets.com/1/${USERNAME}/${repo.name}`;
+        const initialSrc = repo.ogImage || fallbackSrc;
 
         return `
         <div class="card ${featured ? "card-featured" : ""}" style="--card-delay:${Math.min(i, 10) * 30}ms">
@@ -750,10 +755,10 @@ function render(repos, query = ""){
             <div class="card-preview">
                 <img
                     class="card-thumb"
-                    src="${previewSrc}"
+                    src="${initialSrc}"
+                    data-fallback="${fallbackSrc}"
                     alt=""
                     loading="lazy"
-                    onerror="this.closest('.card-preview').remove()"
                 >
             </div>
 
@@ -815,6 +820,42 @@ function render(repos, query = ""){
 
         addHoverScale(grid.querySelectorAll(".visit-site-btn, .github-link, .name"), 1.06);
     }
+
+    // Thumbnail load failures: try the site's own OG image, fall back once
+    // to GitHub's, and if that ALSO fails, keep retrying indefinitely with
+    // capped exponential backoff (2s, 3s, 5s, 8s... up to once/60s) rather
+    // than giving up. The card just shows a subtle pulsing placeholder
+    // while it waits — never a broken-image icon, never permanently gone.
+    grid.querySelectorAll(".card-thumb").forEach(img => {
+        const fallback = img.dataset.fallback;
+        let usedFallback = false;
+        let attempt = 0;
+
+        function scheduleRetry(){
+            attempt++;
+            const delay = Math.min(2000 * Math.pow(1.6, attempt), 60000);
+            setTimeout(() => {
+                const base = img.src.split("?")[0];
+                img.src = `${base}?retry=${Date.now()}`;
+            }, delay);
+        }
+
+        img.addEventListener("error", () => {
+            if(!usedFallback && fallback && img.src.split("?")[0] !== fallback){
+                usedFallback = true;
+                attempt = 0;
+                img.src = fallback;
+                return;
+            }
+            img.closest(".card-preview")?.classList.add("thumb-retrying");
+            scheduleRetry();
+        });
+
+        img.addEventListener("load", () => {
+            attempt = 0;
+            img.closest(".card-preview")?.classList.remove("thumb-retrying");
+        });
+    });
 
 }
 

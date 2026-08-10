@@ -537,6 +537,20 @@ h1{ display:none; } /* replaced by terminal title */
     border:1px solid var(--border);
     display:block;
     background:var(--term);
+    transition:opacity .3s ease;
+}
+
+.thumb-retrying .card-thumb{
+    opacity:.15;
+    animation:thumbPulse 1.6s ease-in-out infinite;
+}
+
+@keyframes thumbPulse{
+    50%{ opacity:.4; }
+}
+
+@media (prefers-reduced-motion: reduce){
+    .thumb-retrying .card-thumb{ animation:none; opacity:.3; }
 }
 
 @keyframes cardIn{

@@ -803,7 +803,8 @@ function render(repos, query = ""){
 
             <div class="meta">
                 ${repo.stargazers_count > 0 ? `<span>★ ${repo.stargazers_count}</span>` : ""}
-                <span>created ${timeAgo(repo.created_at)}</span>
+                <span>updated ${timeAgo(repo.pushed_at)}</span>
+                <span style="margin-left:auto;">created on: ${new Date(repo.created_at).toLocaleDateString()}</span>
             </div>
 
         </div>

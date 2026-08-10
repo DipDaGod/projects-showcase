@@ -75,7 +75,7 @@ function addHoverScale(els, hoverScale = 1.06){
     function update(){
         motionAnimate(bgGlow,
             { x: mouseX - glowRadius, y: mouseY - glowRadius },
-            { type: "spring", stiffness: 26, damping: 24, mass: 0.6 }
+            { type: "spring", stiffness: 180, damping: 26, mass: 0.25 }
         );
 
         queued = false;

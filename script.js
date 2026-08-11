@@ -16,7 +16,7 @@ const EXCLUDE = [
 ];
 
 const CACHE_KEY = "github_repo_cache"; // whatever's here is what a reload shows — reloading never fetches
-
+const SORT_BY_STARS = false;
 const grid = document.getElementById("grid");
 const subtitle = document.getElementById("subtitle");
 const status = document.getElementById("status");

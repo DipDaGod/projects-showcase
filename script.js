@@ -1,11 +1,6 @@
-// if anyone is reading this. yes the code was made by claude, 
-// i overlooked the features/functionality of the code but the comments still remain
-// this is dhairya khetan, signing off :>
-
-
 const USERNAME = "dipdagod";
 
-// cloudflare worker
+// Fetches GitHub repos through the worker (KV-cached, refreshes once/day). Set WORKER_BASE to your worker URL.
 const WORKER_BASE = "https://logger.dhairyaplayz97.workers.dev";
 
 const EXCLUDE = [
@@ -15,8 +10,10 @@ const EXCLUDE = [
     "DipDaGod",
 ];
 
-const CACHE_KEY = "github_repo_cache"; // whatever's here is what a reload shows — reloading never fetches
 const SORT_BY_STARS = false;
+
+const CACHE_KEY = "github_repo_cache"; // whatever's here is what a reload shows — reloading never fetches
+
 const grid = document.getElementById("grid");
 const subtitle = document.getElementById("subtitle");
 const status = document.getElementById("status");
@@ -46,21 +43,27 @@ const isTouchDevice = window.matchMedia("(hover: none), (pointer: coarse)").matc
 // Motion (motion.dev) loads via CDN in index.html. If it fails, motionAnimate stays null and every spring call below just no-ops — CSS :hover still works.
 const motionAnimate = (typeof Motion !== "undefined" && Motion.animate) || null;
 
-// Spring-animates el to `props` if Motion loaded; otherwise does nothing
-// (the CSS :hover rules still apply on their own in that case).
+// Spring-animates el if Motion loaded; otherwise no-ops (CSS :hover still works).
 function springTo(el, props, opts = {}){
     if(!motionAnimate || prefersReducedMotion) return;
     motionAnimate(el, props, { type: "spring", stiffness: 300, damping: 22, ...opts });
 }
 
-// Binds a springy scale-up-on-hover to one or more elements. Safe to call
-// repeatedly on freshly-created DOM nodes (cards, chips) since it's just
-// addEventListener on whatever's passed in.
+// Springy scale-up-on-hover for one or more elements. Safe on freshly-created nodes.
 function addHoverScale(els, hoverScale = 1.06){
     els.forEach(el => {
         el.addEventListener("mouseenter", () => springTo(el, { scale: hoverScale }));
         el.addEventListener("mouseleave", () => springTo(el, { scale: 1 }));
     });
+}
+
+// Delays fn until ms have passed since the last call — avoids firing on every resize event.
+function debounce(fn, ms = 150){
+    let timer;
+    return (...args) => {
+        clearTimeout(timer);
+        timer = setTimeout(() => fn(...args), ms);
+    };
 }
 
 // Ambient background — cursor-following glow, rAF-throttled.
@@ -141,7 +144,7 @@ function addHoverScale(els, hoverScale = 1.06){
         }
     }
 
-    window.addEventListener("resize", resize);
+    window.addEventListener("resize", debounce(resize));
     resize();
 
     window.addEventListener("mousemove", e => {
@@ -190,14 +193,24 @@ function addHoverScale(els, hoverScale = 1.06){
         return;
     }
 
+    let rafId;
+
     function loop(){
         mouseX += (targetMouseX - mouseX) * MOUSE_EASE;
         mouseY += (targetMouseY - mouseY) * MOUSE_EASE;
         drawFrame(true);
-        requestAnimationFrame(loop);
+        rafId = requestAnimationFrame(loop);
     }
 
-    requestAnimationFrame(loop);
+    document.addEventListener("visibilitychange", () => {
+        if(document.hidden){
+            cancelAnimationFrame(rafId);
+        } else {
+            rafId = requestAnimationFrame(loop);
+        }
+    });
+
+    rafId = requestAnimationFrame(loop);
 })();
 
 // Running code background — several columns of scrolling fake code, brightening toward green near the cursor. Each column has its own speed/content offset.
@@ -210,10 +223,10 @@ function addHoverScale(els, hoverScale = 1.06){
         // 3am engineering decisions
         "why is this working",
         "okay wait. don't touch it.",
-        "I swear this worked 10 minutes ago",
+        "worked 10 minutes ago",
         "if this breaks, I was never here",
         "let me just change one thing",
-        "one thing later: 47 changed files",
+        "one thing later: 47 files changed",
         "npm install and pray",
         "git status (emotional damage)",
         "git diff (oh no)",
@@ -222,25 +235,25 @@ function addHoverScale(els, hoverScale = 1.06){
         "git commit -m \"okay NOW final\"",
         "git push",
         "git push --force",
-        "that was a terrible idea",
+        "terrible idea",
         "we ball",
         "it works. ship it.",
         "do NOT ask me why this works",
-        "I could explain this but I won't",
-        "temporary fix // added 8 months ago",
+        "won't explain this one",
+        "temporary fix, added 8 months ago",
         "TODO: fix this properly",
         "TODO: ignore previous TODO",
         "future me can deal with this",
         "future me is going to hate me",
-        "why did I name this variable that",
-        "this variable name made sense at 3:17am",
+        "why did I name it that",
+        "made sense at 3:17am",
         "console.log('WHY')",
         "console.log('WHAT')",
         "console.log('OH COME ON')",
 
         // actual dev life
-        "const repos = await fetch(WORKER_BASE);",
-        "for (const repo of repos) render(repo);",
+        "const data = await fetch(url);",
+        "for (const item of items) render(item);",
         "STATUS 200 OK",
         "[ok] somehow still alive",
         "[ok] cache warm",
@@ -249,97 +262,97 @@ function addHoverScale(els, hoverScale = 1.06){
         "> deployment successful",
         "> pretending that was intentional",
         "npm run build",
-        "build completed without screaming",
-        "worker: rate limit okay",
+        "build completed, no screaming",
+        "rate limit: okay",
         "edge: doing its thing",
         "git rebase -i HEAD~3",
-        "SELECT * FROM repos WHERE fork = false;",
-        "await env.STATS_KV.put(key, JSON.stringify(record));",
-        "npx wrangler deploy",
+        "SELECT * FROM users WHERE active = true;",
+        "await kv.put(key, JSON.stringify(data));",
+        "npx deploy",
         "chmod +x deploy.sh && ./deploy.sh",
-        "$ curl -s api.github.com/users/dipdagod",
-        "$ dig logger.dhairyaplayz97.workers.dev",
-        "const user = \"dipdagod\";",
-        "await syncProject(env, \"showcase\", project);",
-        "diff --git a/index.html b/index.html",
-        "export default { async fetch(request, env) {",
-        "return new Response(body, { headers });",
+        "$ curl -s api.example.com/status",
+        "$ dig example.com",
+        "const user = getCurrentUser();",
+        "await syncData();",
+        "diff --git a/main.js b/main.js",
+        "export default { fetch(req) {",
+        "return new Response(body);",
 
         // thoughts nobody asked for
-        "I should probably be studying",
-        "this could have been an assignment",
-        "10 minutes of coding, 3 hours of unnecessary UI",
-        "is this useful? no. is it cool? yes.",
-        "I could've used a library",
-        "I chose suffering instead",
-        "why make it simple when I can make it mine",
-        "overengineering level: concerning",
+        "should probably be studying",
+        "this could've been an assignment",
+        "10 min of code, 3 hrs of UI",
+        "not useful. very cool.",
+        "could've used a library",
+        "chose suffering instead",
+        "why simple when I can overdo it",
+        "overengineering: concerning",
         "feature request: sleep",
         "bug report: skill issue",
-        "performance optimization: close Chrome",
-        "debugging technique: stare at it",
-        "debugging technique: stare harder",
-        "debugging technique: ask ChatGPT",
-        "ChatGPT said it was fine",
+        "perf fix: close Chrome",
+        "debug technique: stare at it",
+        "debug technique: stare harder",
+        "debug technique: ask AI",
+        "AI said it was fine",
         "it was not fine",
-        "I have made a mistake",
-        "I have made several mistakes",
-        "at least the website looks good",
-        "the CSS is holding this entire project together",
+        "made a mistake",
+        "made several mistakes",
+        "at least it looks good",
+        "the CSS is holding this together",
 
         // easter eggs
-        "// dipdagod was here",
+        "hey, you found this",
         "$ whoami",
-        "dipdagod",
+        "someone cool, probably",
         "if (you.reading(this)) hire(me);",
         "if (you.reading(this)) hi.",
-        "console.log('you found this');",
-        "// this comment is load-bearing",
-        "// don't tell anyone about this",
-        "// yes, this is intentional",
-        "// no, I will not explain this",
-        "// definitely not held together by duct tape",
-        "status: probably overengineered",
+        "you weren't supposed to see this",
+        "load-bearing comment",
+        "don't tell anyone about this",
+        "yes, this is intentional",
+        "no, I won't explain this",
+        "definitely not duct tape",
+        "status: overengineered",
         "status: surprisingly functional",
         "status: held together by vibes",
         "loading portfolio...",
         "loading unnecessary features...",
         "loading another animation...",
         "0 matches",
-        "cat thoughts.txt | grep \"good idea\"",
-        "No manual entry for good decisions",
+        "grep \"good idea\" thoughts.txt",
+        "no manual entry for good decisions",
         "$ man life",
-        "No manual entry for life",
+        "no manual entry for life",
 
         // rage logs
         "WHY IS THE DIV 3PX OFF",
         "WHO MOVED THE PADDING",
         "WHY DOES FLEXBOX DO THIS",
-        "I HAVE BEEN LOOKING AT THIS FOR AN HOUR",
-        "it was a missing semicolon",
-        "it was ONE character",
+        "STARING AT THIS FOR AN HOUR",
+        "missing semicolon",
+        "one character",
         "I hate computers",
         "okay I love computers again",
-        "who wrote this code",
+        "who wrote this",
         "oh. me.",
         "DELETE EVERYTHING",
         "wait don't delete everything",
         "ctrl+z ctrl+z ctrl+z",
-        "WHY DID CTRL+Z MAKE IT WORSE",
-        "fine. I'll rebuild it",
-        "3:42 AM was not the time for this",
+        "WHY DID THAT MAKE IT WORSE",
+        "fine. rebuilding it.",
+        "3:42 AM was not the time",
 
         // questionable philosophy
         "code first, understand later",
-        "if it compiles, investigate nothing",
-        "if it doesn't compile, blame the semicolon",
+        "if it compiles, ship it",
+        "if not, blame the semicolon",
         "comments are future-me's problem",
         "future-me has been notified",
-        "there is no such thing as the final version",
-        "final_final_REAL.html",
-        "final_final_REAL_v2.html",
-        "final_final_REAL_v2_ACTUAL.html",
-        "this was supposed to be quick",
+        "there is no final version",
+        "final_REAL.html",
+        "final_REAL_v2.html",
+        "final_REAL_v2_ACTUAL.html",
+        "supposed to be quick",
         "nothing is ever quick",
         "one last feature",
         "one last feature",
@@ -349,9 +362,9 @@ function addHoverScale(els, hoverScale = 1.06){
         // tiny bits of chaos
         "> _",
         ">> still here?",
-        ">> you have been scrolling for a while",
+        ">> been scrolling a while",
         ">> respect",
-        "[■■■■■■■■■■] 100% questionable decisions",
+        "[■■■■■■■■■■] 100% questionable",
         "[■■■■■■■■□□] 80% vibes",
         "[■■■■■■□□□□] 60% sleep",
         "[■□□□□□□□□□] 10% common sense",
@@ -359,10 +372,10 @@ function addHoverScale(els, hoverScale = 1.06){
         "┬─┬ノ( º _ ºノ)",
         "٩(◕‿◕)۶",
         "¯\\_(ツ)_/¯",
-        "throw new Error(\"should never happen\");",
-        "// narrator: it happened",
-        "// narrator: it was worse than expected",
-        "// narrator: he shipped it anyway",
+        "should never happen",
+        "narrator: it happened",
+        "narrator: worse than expected",
+        "narrator: shipped it anyway",
     ];
 
     const LINE_HEIGHT = 24;
@@ -424,7 +437,7 @@ function addHoverScale(els, hoverScale = 1.06){
         }
     }
 
-    window.addEventListener("resize", resize);
+    window.addEventListener("resize", debounce(resize));
     resize();
 
     window.addEventListener("mousemove", e => {
@@ -498,15 +511,28 @@ function addHoverScale(els, hoverScale = 1.06){
             }
         }
 
-        requestAnimationFrame(loop);
+        rafId = requestAnimationFrame(loop);
     }
 
-    requestAnimationFrame(loop);
+    let rafId;
+
+    function startLoop(){
+        lastTime = performance.now(); // avoid a huge dt spike from time spent paused
+        rafId = requestAnimationFrame(loop);
+    }
+
+    document.addEventListener("visibilitychange", () => {
+        if(document.hidden){
+            cancelAnimationFrame(rafId);
+        } else {
+            startLoop();
+        }
+    });
+
+    startLoop();
 })();
 
-// Animates a number from 0 up to `target`, writing through `render(n)` each
-// frame. Used for the stats bar so it feels like the numbers are tallying
-// up rather than just appearing.
+// Counts a number up from 0 to target — used for the stats bar.
 function animateNumber(target, render, duration = 700){
     if(prefersReducedMotion){
         render(target);
@@ -557,9 +583,7 @@ const LANG_COLORS_LC = Object.fromEntries(
     Object.entries(LANG_COLORS).map(([k, v]) => [k.toLowerCase(), v])
 );
 
-// Case-insensitive since GitHub topics are lowercase but this map's keys
-// aren't. Pass fallback=null to find out whether a language/topic is
-// actually recognized (used to decide whether to show a dot at all).
+// Case-insensitive lookup; pass fallback=null to check if a language/topic is recognized.
 function langColor(lang, fallback = "#8b949e"){
     return LANG_COLORS_LC[String(lang).toLowerCase()] ?? fallback;
 }
@@ -680,9 +704,7 @@ function renderLangChips(repos, breakdown){
     });
 }
 
-// Single call site for "recompute everything language-related off this
-// repo list" — used everywhere allRepos changes, instead of three separate
-// render calls copy-pasted at each call site.
+// Recomputes everything language-related — replaces three separate calls at each call site.
 function renderLangSections(repos){
     const breakdown = getLangBreakdown(repos);
     renderStatsBar(repos, breakdown);
@@ -984,9 +1006,7 @@ function highlightMatch(name, query){
     return `${before}<mark>${match}</mark>${after}`;
 }
 
-// Relative time using exactly one unit (days, months, or years — whichever
-// is most sensible), rounded to the nearest whole number rather than
-// showing a raw date like "8/9/2026".
+// Relative time in one unit (days/months/years), rounded — not a raw date.
 function timeAgo(dateStr){
     const diffDays = (Date.now() - new Date(dateStr)) / (1000 * 60 * 60 * 24);
 
@@ -1031,7 +1051,11 @@ function getVisibleRepos(){
 
     const q = filterInput.value.trim().toLowerCase();
     if(q){
-        repos = repos.filter(r => r.name.toLowerCase().includes(q));
+        repos = repos.filter(r =>
+            r.name.toLowerCase().includes(q) ||
+            (r.description && r.description.toLowerCase().includes(q)) ||
+            (r.topics || []).some(t => t.toLowerCase().includes(q))
+        );
     }
 
     return repos;

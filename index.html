@@ -4,23 +4,17 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>dipdagod — projects</title>
-
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-
 <link rel="stylesheet" href="style.css">
 <script src="https://cdn.jsdelivr.net/npm/motion@latest/dist/motion.js"></script>
 </head>
-
 <body>
-
 <canvas id="code-bg" aria-hidden="true"></canvas>
 <canvas id="ascii-flow" aria-hidden="true"></canvas>
 <div id="bg-glow" aria-hidden="true"></div>
-
 <h1>My Projects</h1>
-
 <div class="term">
     <div class="term-bar">
         <span class="dot r"></span>
@@ -28,14 +22,12 @@
         <span class="dot g"></span>
         <span class="term-title">dipdagod@projects:~</span>
     </div>
-
     <div class="term-body">
         <div class="prompt-line">
             <span class="prompt-user">dipdagod@projects</span><span class="prompt-punct">:</span><span class="prompt-path">~</span><span class="prompt-punct">$</span>
             <span class="prompt-cmd">git ls-repos</span>
         </div>
         <p id="subtitle">checking cache...</p>
-
         <div class="controls">
             <div class="filter-wrap">
                 <span class="filter-prefix">grep -i</span>
@@ -55,7 +47,6 @@
             </div>
             <button id="refresh"><span class="icon">⟳</span><span class="label">pull</span></button>
         </div>
-
         <div id="meta-panel">
             <div id="stats-bar"></div>
             <div id="lang-bar" aria-hidden="true"></div>
@@ -63,15 +54,12 @@
         </div>
     </div>
 </div>
-
 <div id="grid"></div>
-
 <div id="status-row">
     <div id="status"></div>
     <div id="uptime"></div>
     <button id="help-toggle" type="button" aria-label="Keyboard shortcuts">? help</button>
 </div>
-
 <div id="help-panel" hidden>
     <div class="help-title">$ man shortcuts</div>
     <div class="help-row"><kbd>/</kbd><span>focus filter</span></div>
@@ -79,8 +67,6 @@
     <div class="help-row"><kbd>?</kbd><span>toggle this panel</span></div>
     <div class="help-row"><kbd>↻ pull</kbd><span>fetch latest repos</span></div>
 </div>
-
 <script src="script.js"></script>
-
 </body>
 </html>

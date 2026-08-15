@@ -9,6 +9,7 @@ const EXCLUDE = [
     "Wisdom-Woods",
     "DipDaGod",
     "funny",
+    "hosting-opengraphs",
 ];
 
 const SORT_BY_STARS = false;

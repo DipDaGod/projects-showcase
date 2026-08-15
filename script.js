@@ -8,6 +8,7 @@ const EXCLUDE = [
     "projects-showcase",
     "Wisdom-Woods",
     "DipDaGod",
+    "funny",
 ];
 
 const SORT_BY_STARS = false;

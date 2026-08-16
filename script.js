@@ -299,6 +299,7 @@ function debounce(fn, ms = 150){
         "made several mistakes",
         "at least it looks good",
         "the CSS is holding this together",
+        "Aquaterra is the best",
 
         // easter eggs
         "hey, you found this",

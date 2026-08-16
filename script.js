@@ -6,8 +6,6 @@ const WORKER_BASE = "https://logger.dhairyaplayz97.workers.dev";
 const EXCLUDE = [
     "dipdagod.github.io",
     "projects-showcase",
-    "Wisdom-Woods",
-    "DipDaGod",
     "funny",
     "hosting-opengraphs",
 ];

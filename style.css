@@ -352,6 +352,28 @@ h1{ display:none; } /* replaced by terminal title */
     text-transform:uppercase;
     color:var(--muted-dim);
 }
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #303746;
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #4a5568;
+}
+
+html {
+  scrollbar-width: thin;
+  scrollbar-color: #303746 transparent;
+}
 /* language chips */
 #lang-chips{
     display:flex;

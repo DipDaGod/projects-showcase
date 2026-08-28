@@ -1,13 +1,11 @@
 const USERNAME = "dipdagod";
 
-// Fetches GitHub repos through the worker (KV-cached, refreshes once/day). Set WORKER_BASE to your worker URL.
+// Fetches GitHub repos through the worker
 const WORKER_BASE = "https://logger.dhairyaplayz97.workers.dev";
 
 const EXCLUDE = [
-    "dipdagod.github.io",
     "projects-showcase",
-    "funny",
-    "hosting-opengraphs",
+    "Wisdom-Woods",
 ];
 
 const SORT_BY_STARS = false;

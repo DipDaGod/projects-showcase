@@ -779,9 +779,16 @@ async function fetchRepos(){
 
     try{
 
+        const cacheRaw = localStorage.getItem(CACHE_KEY);
+        const cacheObj = (() => { try { return JSON.parse(cacheRaw); } catch { return null; } })();
+        const knownEtag = cacheObj?.etag;
+
         const response = await fetch(
             `${WORKER_BASE}?project=showcase&path=repos`,
-            { cache: "no-store" }
+            {
+                cache: "no-store",
+                headers: knownEtag ? { "If-None-Match": knownEtag } : {}
+            }
         );
 
         if(response.status === 429){
@@ -790,11 +797,25 @@ async function fetchRepos(){
             return;
         }
 
+        if(response.status === 304){
+            // Server confirmed nothing changed since our last pull — same
+            // data we already have on screen, so there's nothing to
+            // re-parse or re-render. Just note the check happened.
+            if(cacheObj){
+                cacheObj.time = Date.now();
+                localStorage.setItem(CACHE_KEY, JSON.stringify(cacheObj));
+            }
+            status.textContent = `last synced ${new Date().toLocaleString()} · unchanged`;
+            setButtonState("success");
+            return;
+        }
+
         if(!response.ok){
             throw new Error(`Worker returned ${response.status} — check allowedOrigins / WORKER_BASE in logger.js`);
         }
 
         let repos = await response.json();
+        const etag = response.headers.get("etag");
 
         repos = repos.filter(repo =>
             !repo.fork &&
@@ -814,6 +835,7 @@ async function fetchRepos(){
             CACHE_KEY,
             JSON.stringify({
                 time: Date.now(),
+                etag,
                 data: repos
             })
         );

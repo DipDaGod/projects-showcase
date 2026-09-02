@@ -713,7 +713,7 @@ function renderLangSections(repos){
 
 // Refresh button state
 function setButtonState(state){
-    refreshBtn.classList.remove("loading", "success", "error");
+    refreshBtn.classList.remove("loading", "success", "error", "limited");
 
     if(state === "loading"){
         refreshBtn.disabled = true;
@@ -725,21 +725,56 @@ function setButtonState(state){
     refreshBtn.disabled = false;
     refreshBtn.querySelector(".label").textContent = "pull";
 
+    if(state === "limited"){
+        refreshBtn.classList.add("limited");
+        refreshBtn.querySelector(".label").textContent = "limited";
+        setTimeout(() => {
+            refreshBtn.classList.remove("limited");
+            refreshBtn.querySelector(".label").textContent = "pull";
+        }, 2000);
+        return;
+    }
+
     if(state === "success" || state === "error"){
         refreshBtn.classList.add(state);
         setTimeout(() => refreshBtn.classList.remove(state), 1000);
     }
 }
 
-// Every click hits the network for real — the worker enforces the actual rate limit; a 429 just settles the button with no error shown.
+// Small top-of-page toast for transient messages the button state alone
+// doesn't explain (e.g. "the worker throttled this pull"). Reuses one
+// element instead of stacking multiples — a second call just restarts
+// the timer with the new message.
+let toastTimer;
+function showToast(message, tone = "warn", duration = 3000){
+    const toast = document.getElementById("toast");
+    if(!toast) return;
+
+    clearTimeout(toastTimer);
+    toast.textContent = message;
+    toast.className = `toast toast-${tone} visible`;
+    toast.hidden = false;
+
+    toastTimer = setTimeout(() => {
+        toast.classList.remove("visible");
+        setTimeout(() => { toast.hidden = true; }, 200); // let the fade-out transition finish first
+    }, duration);
+}
+
+// Every click hits the network for real — the worker enforces the actual
+// rate limit. If we already have cached cards on screen, a pull never
+// dims or blanks the grid — it's a quiet background fetch that swaps in
+// whatever changed once it lands; the button is the only loading signal.
+// The only exception is a genuine first load with no cache at all, which
+// still shows skeletons since there's nothing to look at yet.
 async function fetchRepos(){
+
+    const hasCache = allRepos.length > 0;
 
     setButtonState("loading");
 
-    if(allRepos.length === 0){
+    if(!hasCache){
         renderSkeleton();
-    } else {
-        grid.classList.add("refreshing");
     }
 
     try{
@@ -750,8 +785,8 @@ async function fetchRepos(){
         );
 
         if(response.status === 429){
-            grid.classList.remove("refreshing");
-            setButtonState("success");
+            setButtonState("limited");
+            showToast("rate limited — try again in a bit");
             return;
         }
 
@@ -772,7 +807,6 @@ async function fetchRepos(){
 
         allRepos = repos;
 
-        grid.classList.remove("refreshing");
         renderLangSections(allRepos);
         applyFilter();
 
@@ -797,19 +831,22 @@ async function fetchRepos(){
 
         console.error(err);
 
-        grid.classList.remove("refreshing");
-
-        subtitle.textContent = "fatal: repo fetch failed";
+        // Only wipe the grid on a hard failure with nothing cached to fall
+        // back on — if cached cards are already showing, leave them up and
+        // just report the failure quietly instead of yanking working content.
+        if(!hasCache){
+            grid.innerHTML = `
+                <div class="card notice">
+                    <strong>✗ Failed to load repositories</strong>
+                    <span>${escapeHtml(err.message)}</span>
+                </div>
+            `;
+            subtitle.textContent = "fatal: repo fetch failed";
+        } else {
+            showToast("pull failed — showing cached data", "error");
+        }
 
         status.textContent = err.message;
-
-        grid.innerHTML = `
-            <div class="card notice">
-                <strong>✗ Failed to load repositories</strong>
-                <span>${escapeHtml(err.message)}</span>
-            </div>
-        `;
-
         setButtonState("error");
         return;
     }
@@ -861,6 +898,7 @@ function render(repos, query = ""){
                         class="name"
                         href="${repo.html_url}"
                         target="_blank"
+                        rel="noopener"
                     >
                         ${highlightMatch(repo.name, query)}
                     </a>
@@ -910,13 +948,13 @@ function render(repos, query = ""){
                 ${
                     repo.homepage
                         ? `
-                        <a class="visit-site-btn" href="${repo.homepage}" target="_blank">
+                        <a class="visit-site-btn" href="${repo.homepage}" target="_blank" rel="noopener">
                             <span class="arrow">↗</span> Visit Site
                         </a>
                         `
                         : ""
                 }
-                <a class="github-link" href="${repo.html_url}" target="_blank">Github</a>
+                <a class="github-link" href="${repo.html_url}" target="_blank" rel="noopener">Github</a>
             </div>
 
             <div class="meta">

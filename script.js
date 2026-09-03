@@ -10,7 +10,7 @@ const EXCLUDE = [
 
 const SORT_BY_STARS = false;
 
-const CACHE_KEY = "github_repo_cache"; // whatever's here is what a reload shows — reloading never fetches
+const CACHE_KEY = "github_repo_cache";
 
 const grid = document.getElementById("grid");
 const subtitle = document.getElementById("subtitle");
@@ -784,7 +784,7 @@ async function fetchRepos(){
         const knownEtag = cacheObj?.etag;
 
         const response = await fetch(
-            `${WORKER_BASE}?project=showcase&path=repos`,
+            `${WORKER_BASE}?project=showcase`,
             {
                 cache: "no-store",
                 headers: knownEtag ? { "If-None-Match": knownEtag } : {}
@@ -811,7 +811,7 @@ async function fetchRepos(){
         }
 
         if(!response.ok){
-            throw new Error(`Worker returned ${response.status} — check allowedOrigins / WORKER_BASE in logger.js`);
+            throw new Error(`Worker returned ${response.status} — check ALLOWED_ORIGIN / PROJECTS in logger-worker.js`);
         }
 
         let repos = await response.json();

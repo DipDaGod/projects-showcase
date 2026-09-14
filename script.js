@@ -1,3 +1,11 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   dipdagod / projects
+   ─────────────────────────────────────────────────────────────────────
+   Data comes from a Cloudflare Worker in front of the GitHub API; the
+   rest of this file is the motion layer: scroll reveals, FLIP re-orders,
+   pointer-reactive cards, and the two ambient canvases behind it all.
+   ═══════════════════════════════════════════════════════════════════════ */
+
 const USERNAME = "dipdagod";
 
 // Fetches GitHub repos through the worker
@@ -12,20 +20,30 @@ const SORT_BY_STARS = false;
 
 const CACHE_KEY = "github_repo_cache";
 
-const grid = document.getElementById("grid");
-const subtitle = document.getElementById("subtitle");
-const status = document.getElementById("status");
-const refreshBtn = document.getElementById("refresh");
-const uptimeEl = document.getElementById("uptime");
-const helpPanel = document.getElementById("help-panel");
-const helpToggle = document.getElementById("help-toggle");
-const statsBar = document.getElementById("stats-bar");
-const langBar = document.getElementById("lang-bar");
-const langChips = document.getElementById("lang-chips");
-const sortDropdown = document.getElementById("sort-dropdown");
-const sortToggle = document.getElementById("sort-toggle");
-const sortMenu = document.getElementById("sort-menu");
-const bgGlow = document.getElementById("bg-glow");
+/* ── dom ──────────────────────────────────────────────────────────── */
+const $ = id => document.getElementById(id);
+
+const grid = $("grid");
+const subtitle = $("subtitle");
+const statusEl = $("status");
+const refreshBtn = $("refresh");
+const uptimeEl = $("uptime");
+const helpPanel = $("help-panel");
+const helpToggle = $("help-toggle");
+const statsBar = $("stats-bar");
+const langBar = $("lang-bar");
+const langChips = $("lang-chips");
+const sortDropdown = $("sort-dropdown");
+const sortToggle = $("sort-toggle");
+const sortMenu = $("sort-menu");
+const bgGlow = $("bg-glow");
+const topbar = $("topbar");
+const scrollBar = $("scroll-bar");
+const toTop = $("to-top");
+const resultCount = $("result-count");
+const heroCount = $("hero-count");
+const heroLangs = $("hero-langs");
+const heroStars = $("hero-stars");
 
 let allRepos = [];
 let activeLanguage = null;
@@ -35,11 +53,18 @@ const PAGE_LOAD_TIME = Date.now();
 
 const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-// Touch/no-hover devices get no benefit from cursor-tracking effects — skip them entirely instead of running rAF loops for nothing.
+// Touch/no-hover devices get no benefit from cursor-tracking effects — skip
+// them entirely instead of running rAF loops for nothing.
 const isTouchDevice = window.matchMedia("(hover: none), (pointer: coarse)").matches;
 
-// Motion (motion.dev) loads via CDN in index.html. If it fails, motionAnimate stays null and every spring call below just no-ops — CSS :hover still works.
+// Motion (motion.dev) loads via CDN in index.html. If it fails, motionAnimate
+// stays null and every spring call below just no-ops — CSS :hover still works.
 const motionAnimate = (typeof Motion !== "undefined" && Motion.animate) || null;
+
+// True when pointer-driven flourishes (tilt, magnetism, glow) are worth running.
+const richMotion = !prefersReducedMotion && !isTouchDevice;
+
+/* ── small utilities ──────────────────────────────────────────────── */
 
 // Spring-animates el if Motion loaded; otherwise no-ops (CSS :hover still works).
 function springTo(el, props, opts = {}){
@@ -64,55 +89,250 @@ function debounce(fn, ms = 150){
     };
 }
 
-// Ambient background — cursor-following glow, rAF-throttled.
-(function initBackgroundMotion(){
-    if(!motionAnimate || prefersReducedMotion || isTouchDevice) return;
-
-    const glowRadius = 380; // half of #bg-glow's 760px width/height, for centering
-
-    let mouseX = window.innerWidth / 2;
-    let mouseY = window.innerHeight / 2;
+// Collapses a burst of events (scroll, pointermove) down to one call per frame.
+function rafThrottle(fn){
     let queued = false;
+    let lastArgs;
+    return (...args) => {
+        lastArgs = args;
+        if(queued) return;
+        queued = true;
+        requestAnimationFrame(() => {
+            queued = false;
+            fn(...lastArgs);
+        });
+    };
+}
 
-    function update(){
-        motionAnimate(bgGlow,
-            { x: mouseX - glowRadius, y: mouseY - glowRadius },
-            { type: "spring", stiffness: 180, damping: 26, mass: 0.25 }
-        );
+const clamp = (n, min, max) => Math.min(Math.max(n, min), max);
+const lerp = (a, b, t) => a + (b - a) * t;
 
-        queued = false;
-    }
+/* ═══════════════════════════════════════════════════════════════════
+   MOTION LAYER
+   ═══════════════════════════════════════════════════════════════════ */
 
-    window.addEventListener("mousemove", e => {
-        mouseX = e.clientX;
-        mouseY = e.clientY;
+// Splits [data-split] text into per-character spans so each one can ride in
+// on its own delay. Spaces keep their own span so the line still wraps.
+(function initSplitText(){
+    document.querySelectorAll("[data-split]").forEach(el => {
+        const text = el.textContent.trim();
+        el.setAttribute("aria-label", text);
+        el.textContent = "";
 
-        if(!queued){
-            queued = true;
-            requestAnimationFrame(update);
-        }
+        [...text].forEach((ch, i) => {
+            const span = document.createElement("span");
+            span.className = ch === " " ? "char space" : "char";
+            span.style.setProperty("--i", i);
+            span.textContent = ch === " " ? " " : ch;
+            span.setAttribute("aria-hidden", "true");
+            el.appendChild(span);
+        });
     });
 })();
 
-// ASCII flow field — glyphs bend toward the cursor and ease back. Canvas-based (not per-glyph DOM) for perf across hundreds of cells.
+// Types out the prompt command one character at a time. The caret next to it
+// is pure CSS, so it keeps blinking once the line finishes.
+(function initTypewriter(){
+    document.querySelectorAll("[data-typewriter]").forEach(el => {
+        const text = el.dataset.typewriter;
+
+        if(prefersReducedMotion){
+            el.textContent = text;
+            return;
+        }
+
+        let i = 0;
+        const step = () => {
+            el.textContent = text.slice(0, ++i);
+            if(i < text.length) setTimeout(step, 38 + Math.random() * 45);
+        };
+        setTimeout(step, 420);
+    });
+})();
+
+// Scroll reveals. Everything marked [data-reveal] fades up once it enters the
+// viewport; the per-element --delay in the markup staggers siblings.
+const revealObserver = "IntersectionObserver" in window
+    ? new IntersectionObserver((entries, obs) => {
+        entries.forEach(entry => {
+            if(!entry.isIntersecting) return;
+            entry.target.classList.add("revealed");
+            obs.unobserve(entry.target);
+        });
+    }, { rootMargin: "0px 0px -6% 0px", threshold: 0.04 })
+    : null;
+
+function observeReveal(el){
+    if(revealObserver) revealObserver.observe(el);
+    else el.classList.add("revealed");
+}
+
+document.querySelectorAll("[data-reveal]").forEach(observeReveal);
+
+// Cards reveal in batches — whatever scrolls into view together gets a short
+// cascade rather than every card sharing one delay.
+const cardObserver = "IntersectionObserver" in window
+    ? new IntersectionObserver((entries, obs) => {
+        entries
+            .filter(e => e.isIntersecting)
+            .forEach((entry, i) => {
+                entry.target.style.setProperty("--card-delay", `${Math.min(i, 9) * 55}ms`);
+                entry.target.classList.add("card-in");
+                obs.unobserve(entry.target);
+            });
+    }, { rootMargin: "0px 0px -4% 0px", threshold: 0.02 })
+    : null;
+
+function observeCard(card){
+    if(cardObserver) cardObserver.observe(card);
+    else card.classList.add("card-in");
+}
+
+// Scroll-driven chrome: progress bar, condensed top bar, back-to-top button.
+(function initScrollUI(){
+    const onScroll = rafThrottle(() => {
+        const max = document.documentElement.scrollHeight - window.innerHeight;
+        const y = window.scrollY;
+        const pct = max > 0 ? clamp(y / max, 0, 1) : 0;
+
+        if(scrollBar) scrollBar.style.transform = `scaleX(${pct})`;
+        topbar.classList.toggle("stuck", y > 14);
+
+        if(toTop){
+            const show = y > window.innerHeight * 0.7;
+            if(show && toTop.hidden) toTop.hidden = false;
+            toTop.classList.toggle("visible", show);
+        }
+    });
+
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", debounce(onScroll, 120));
+    onScroll();
+
+    toTop?.addEventListener("click", () => {
+        window.scrollTo({ top: 0, behavior: prefersReducedMotion ? "auto" : "smooth" });
+    });
+})();
+
+// Magnetic buttons — the element leans a few pixels toward the cursor while
+// it's over them, then springs back on exit.
+(function initMagnetic(){
+    if(!richMotion) return;
+
+    document.querySelectorAll("[data-magnetic]").forEach(el => {
+        const strength = 0.28;
+        const maxPull = 9;
+
+        const move = rafThrottle(e => {
+            const r = el.getBoundingClientRect();
+            const dx = clamp((e.clientX - (r.left + r.width / 2)) * strength, -maxPull, maxPull);
+            const dy = clamp((e.clientY - (r.top + r.height / 2)) * strength, -maxPull, maxPull);
+
+            if(motionAnimate){
+                motionAnimate(el, { x: dx, y: dy }, { type: "spring", stiffness: 340, damping: 24, mass: .4 });
+            } else {
+                el.style.transform = `translate(${dx}px, ${dy}px)`;
+            }
+        });
+
+        el.addEventListener("pointermove", move);
+        el.addEventListener("pointerleave", () => {
+            if(motionAnimate) springTo(el, { x: 0, y: 0 });
+            else el.style.transform = "";
+        });
+    });
+})();
+
+// Pointer spotlight for the stat boxes — cheap version of the card treatment.
+(function initStatSpotlight(){
+    if(!richMotion || !statsBar) return;
+
+    statsBar.addEventListener("pointermove", e => {
+        const box = e.target.closest(".stat-box");
+        if(!box) return;
+        const r = box.getBoundingClientRect();
+        box.style.setProperty("--mx", `${e.clientX - r.left}px`);
+        box.style.setProperty("--my", `${e.clientY - r.top}px`);
+    });
+})();
+
+// Card tilt + spotlight. The card leans into the cursor and a soft radial
+// highlight tracks it; both unwind on exit.
+function attachCardPointer(card){
+    if(!richMotion) return;
+
+    const MAX_TILT = 4.5;
+    let hovering = false;
+
+    const move = rafThrottle(e => {
+        if(!hovering) return;
+        const r = card.getBoundingClientRect();
+        const px = (e.clientX - r.left) / r.width;
+        const py = (e.clientY - r.top) / r.height;
+
+        card.style.setProperty("--mx", `${e.clientX - r.left}px`);
+        card.style.setProperty("--my", `${e.clientY - r.top}px`);
+
+        const rotY = (px - .5) * 2 * MAX_TILT;
+        const rotX = (.5 - py) * 2 * MAX_TILT;
+
+        card.style.transform =
+            `perspective(900px) rotateX(${rotX.toFixed(2)}deg) rotateY(${rotY.toFixed(2)}deg) translateY(-6px) scale(1.012)`;
+    });
+
+    card.addEventListener("pointerenter", () => {
+        hovering = true;
+        card.style.transition = "transform .25s var(--ease-out), border-color .28s, box-shadow .28s";
+    });
+
+    card.addEventListener("pointermove", move);
+
+    card.addEventListener("pointerleave", () => {
+        hovering = false;
+        card.style.transform = "";
+    });
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   AMBIENT BACKGROUND
+   ═══════════════════════════════════════════════════════════════════ */
+
+// Cursor-following glow, rAF-throttled.
+(function initBackgroundMotion(){
+    if(!motionAnimate || !richMotion || !bgGlow) return;
+
+    const glowRadius = 360; // half of #bg-glow's 720px box, for centering
+
+    const update = rafThrottle((x, y) => {
+        motionAnimate(bgGlow,
+            { x: x - glowRadius, y: y - glowRadius },
+            { type: "spring", stiffness: 180, damping: 26, mass: 0.25 }
+        );
+    });
+
+    window.addEventListener("mousemove", e => update(e.clientX, e.clientY));
+})();
+
+// ASCII flow field — glyphs bend toward the cursor and ease back. Canvas-based
+// (not per-glyph DOM) for perf across hundreds of cells.
 (function initAsciiFlowField(){
-    const canvas = document.getElementById("ascii-flow");
+    const canvas = $("ascii-flow");
     const ctx = canvas && canvas.getContext("2d");
     if(!ctx) return;
 
     const GLYPH = "·";
-    const SPACING = 34;              // px between glyph centers
-    const INFLUENCE_RADIUS = 200;    // px — how far the cursor's pull reaches
+    const SPACING = 36;              // px between glyph centers
+    const INFLUENCE_RADIUS = 210;    // px — how far the cursor's pull reaches
     const MAX_ROTATION = Math.PI / 3;
-    const REST_OPACITY = 0.16;
-    const PEAK_OPACITY = 0.6;
-    const EASE = 0.08;               // per-frame smoothing — lower = slower, floatier settle
+    const REST_OPACITY = 0.13;
+    const PEAK_OPACITY = 0.62;
+    const EASE = 0.08;               // per-frame smoothing — lower = floatier settle
     const MOUSE_EASE = 0.15;         // extra lag on the tracked cursor position itself
 
     let dpr = 1;
     let cells = [];
-    let mouseX = -9999, mouseY = -9999;       // eased, what's actually used to compute distortion
-    let targetMouseX = -9999, targetMouseY = -9999; // raw, updated straight from the event
+    let mouseX = -9999, mouseY = -9999;             // eased, drives the distortion
+    let targetMouseX = -9999, targetMouseY = -9999; // raw, straight from the event
 
     function resize(){
         dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -161,9 +381,9 @@ function debounce(fn, ms = 150){
 
                 if(dist < INFLUENCE_RADIUS){
                     const influence = 1 - dist / INFLUENCE_RADIUS; // 0 at edge → 1 at cursor
-                    const eased = influence * influence;           // ease-in falloff, softer at the rim
+                    const eased = influence * influence;           // softer at the rim
                     cell.targetRot = Math.atan2(dy, dx) * eased * (MAX_ROTATION / Math.PI);
-                    cell.targetScale = 1 + eased * 0.5;
+                    cell.targetScale = 1 + eased * 0.6;
                     cell.targetOpacity = REST_OPACITY + eased * (PEAK_OPACITY - REST_OPACITY);
                 } else {
                     cell.targetRot = 0;
@@ -186,7 +406,7 @@ function debounce(fn, ms = 150){
         }
     }
 
-    if(prefersReducedMotion || isTouchDevice){
+    if(!richMotion){
         drawFrame(false); // static, undistorted grid — no cursor tracking, no rAF loop
         return;
     }
@@ -201,19 +421,17 @@ function debounce(fn, ms = 150){
     }
 
     document.addEventListener("visibilitychange", () => {
-        if(document.hidden){
-            cancelAnimationFrame(rafId);
-        } else {
-            rafId = requestAnimationFrame(loop);
-        }
+        if(document.hidden) cancelAnimationFrame(rafId);
+        else rafId = requestAnimationFrame(loop);
     });
 
     rafId = requestAnimationFrame(loop);
 })();
 
-// Running code background — several columns of scrolling fake code, brightening toward green near the cursor. Each column has its own speed/content offset.
+// Running code background — several columns of scrolling fake code, brightening
+// toward green near the cursor. Each column has its own speed/content offset.
 (function initCodeBackground(){
-    const canvas = document.getElementById("code-bg");
+    const canvas = $("code-bg");
     const ctx = canvas && canvas.getContext("2d");
     if(!ctx) return;
 
@@ -378,11 +596,11 @@ function debounce(fn, ms = 150){
     ];
 
     const LINE_HEIGHT = 24;
-    const COLUMN_WIDTH = 300;             // px — also caps how wide a line can render before truncating
+    const COLUMN_WIDTH = 300;             // px — also caps line width before truncating
     const COLUMN_PADDING = 24;
-    const REST_COLOR = [90, 100, 116];    // dim muted-blue-grey at rest — lower than before since far more of this is now on screen at once
+    const REST_COLOR = [70, 80, 96];       // dim blue-grey at rest
     const GLOW_COLOR = [126, 231, 135];   // same light green as everything else
-    const INFLUENCE = 160;                // px — how far the cursor's warmth reaches
+    const INFLUENCE = 180;                // px — how far the cursor's warmth reaches
     const EASE = 0.08;
 
     let dpr = 1;
@@ -417,8 +635,8 @@ function debounce(fn, ms = 150){
         columns = [];
         for(let c = 0; c < colCount; c++){
             const x = c * COLUMN_WIDTH + COLUMN_PADDING;
-            let nextLineIndex = c * 5; // stagger starting content so columns don't mirror each other
-            const speed = 6 + Math.random() * 6; // px/sec, upward — varies per column for an organic feel
+            let nextLineIndex = c * 5; // stagger content so columns don't mirror each other
+            const speed = 6 + Math.random() * 6; // px/sec upward — varies for an organic feel
 
             const lines = [];
             for(let r = 0; r < rowCount; r++){
@@ -451,11 +669,9 @@ function debounce(fn, ms = 150){
         return Math.sqrt(dx * dx + dy * dy);
     }
 
-    function lerp(a, b, t){ return a + (b - a) * t; }
-
     function drawStatic(){
         ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
-        ctx.fillStyle = `rgba(${REST_COLOR.join(",")},.4)`;
+        ctx.fillStyle = `rgba(${REST_COLOR.join(",")},.22)`;
         for(const col of columns){
             for(const line of col.lines){
                 ctx.fillText(line.text, col.x, line.y);
@@ -463,12 +679,13 @@ function debounce(fn, ms = 150){
         }
     }
 
-    if(prefersReducedMotion || isTouchDevice){
+    if(!richMotion){
         drawStatic();
         return;
     }
 
     const maxLineWidth = COLUMN_WIDTH - COLUMN_PADDING * 2;
+    let rafId;
 
     function loop(now){
         const dt = Math.min((now - lastTime) / 1000, 0.05);
@@ -504,7 +721,7 @@ function debounce(fn, ms = 150){
                     line.color[c] += (target[c] - line.color[c]) * EASE;
                 }
 
-                const opacity = lerp(0.28, 0.9, influence);
+                const opacity = lerp(0.16, 0.82, influence);
                 ctx.fillStyle = `rgba(${line.color.map(Math.round).join(",")},${opacity.toFixed(3)})`;
                 ctx.fillText(line.text, col.x, line.y);
             }
@@ -513,26 +730,25 @@ function debounce(fn, ms = 150){
         rafId = requestAnimationFrame(loop);
     }
 
-    let rafId;
-
     function startLoop(){
         lastTime = performance.now(); // avoid a huge dt spike from time spent paused
         rafId = requestAnimationFrame(loop);
     }
 
     document.addEventListener("visibilitychange", () => {
-        if(document.hidden){
-            cancelAnimationFrame(rafId);
-        } else {
-            startLoop();
-        }
+        if(document.hidden) cancelAnimationFrame(rafId);
+        else startLoop();
     });
 
     startLoop();
 })();
 
-// Counts a number up from 0 to target — used for the stats bar.
-function animateNumber(target, render, duration = 700){
+/* ═══════════════════════════════════════════════════════════════════
+   NUMBERS, CLOCKS, PANELS
+   ═══════════════════════════════════════════════════════════════════ */
+
+// Counts a number up from 0 to target — used for the stats bar and hero line.
+function animateNumber(target, render, duration = 900){
     if(prefersReducedMotion){
         render(target);
         return;
@@ -567,7 +783,21 @@ function setHelpVisible(visible){
 }
 
 helpToggle.addEventListener("click", () => setHelpVisible(helpPanel.hidden));
-addHoverScale([refreshBtn, helpToggle], 1.06);
+addHoverScale([helpToggle], 1.06);
+
+// Subtitle updates get a brief green flash so a fresh pull is visible even
+// when the repo list itself hasn't changed.
+function setSubtitle(text){
+    subtitle.textContent = text;
+    if(prefersReducedMotion) return;
+    subtitle.classList.remove("flash");
+    void subtitle.offsetWidth; // restart the animation
+    subtitle.classList.add("flash");
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   LANGUAGES + STATS
+   ═══════════════════════════════════════════════════════════════════ */
 
 // Language colors (subset of GitHub's linguist palette)
 const LANG_COLORS = {
@@ -587,7 +817,8 @@ function langColor(lang, fallback = "#8b949e"){
     return LANG_COLORS_LC[String(lang).toLowerCase()] ?? fallback;
 }
 
-// Single source of truth for per-language counts — stats bar, language bar, and filter chips all read from this instead of each looping repos themselves.
+// Single source of truth for per-language counts — stats bar, language bar,
+// hero line and filter chips all read from this.
 function getLangBreakdown(repos){
     const counts = {};
     let total = 0;
@@ -604,7 +835,16 @@ function getLangBreakdown(repos){
     return { counts, entries, total };
 }
 
-// Stats bar — off the full repo set, not the filtered view. Repo/star counts animate up.
+// The three numbers in the hero, counted up rather than dropped in.
+function renderHeroStats(repos, breakdown){
+    const totalStars = repos.reduce((sum, r) => sum + r.stargazers_count, 0);
+
+    if(heroCount) animateNumber(repos.length, n => heroCount.textContent = n);
+    if(heroLangs) animateNumber(breakdown.entries.length, n => heroLangs.textContent = n);
+    if(heroStars) animateNumber(totalStars, n => heroStars.textContent = n);
+}
+
+// Stats bar — off the full repo set, not the filtered view.
 function renderStatsBar(repos, breakdown){
     const totalStars = repos.reduce((sum, r) => sum + r.stargazers_count, 0);
     const topLang = breakdown.entries[0]?.[0] ?? "—";
@@ -634,8 +874,8 @@ function renderStatsBar(repos, breakdown){
         </div>
     `;
 
-    const reposEl = document.getElementById("stat-repos");
-    const starsEl = document.getElementById("stat-stars");
+    const reposEl = $("stat-repos");
+    const starsEl = $("stat-stars");
 
     animateNumber(repos.length, n => reposEl.textContent = n);
     if(starsEl) animateNumber(totalStars, n => starsEl.textContent = `★ ${n}`);
@@ -656,7 +896,8 @@ function renderLangBar(breakdown){
     // Set widths on the next frame so the 0 → target change actually
     // transitions instead of rendering already-filled.
     requestAnimationFrame(() => {
-        langBar.querySelectorAll(".lang-bar-seg").forEach(seg => {
+        langBar.querySelectorAll(".lang-bar-seg").forEach((seg, i) => {
+            seg.style.transitionDelay = `${Math.min(i, 8) * 60}ms`;
             seg.style.width = `${seg.dataset.pct}%`;
         });
     });
@@ -665,7 +906,7 @@ function renderLangBar(breakdown){
 // Language filter chips
 function renderLangChips(repos, breakdown){
     if(activeLanguage && !breakdown.counts[activeLanguage]){
-        activeLanguage = null; // previously active language no longer present (e.g. after a fresh pull)
+        activeLanguage = null; // language no longer present (e.g. after a fresh pull)
     }
 
     const allChip = `
@@ -676,7 +917,7 @@ function renderLangChips(repos, breakdown){
 
     const langChipsHtml = breakdown.entries.map(([lang, count]) => `
         <button class="chip ${activeLanguage === lang ? "active" : ""}" data-lang="${escapeHtml(lang)}">
-            <span class="lang-dot" style="background:${langColor(lang)}"></span>
+            <span class="lang-dot" style="background:${langColor(lang)};color:${langColor(lang)}"></span>
             ${escapeHtml(lang)} <span style="opacity:.6">${count}</span>
         </button>
     `).join("");
@@ -690,26 +931,29 @@ function renderLangChips(repos, breakdown){
             applyFilter();
         });
 
-        // Same spring hover as every other button on the page — the earlier
-        // version skipped this for chips because a naive mouseleave reset
-        // to scale:1 would clobber the active chip's persistent CSS scale.
-        // Fixed properly here: the rest target respects .active instead of
-        // assuming everything resets to 1.
+        // Chips keep a persistent scale when active, so the rest target has to
+        // respect .active instead of assuming everything springs back to 1.
         if(motionAnimate && !prefersReducedMotion){
-            const restScale = () => chip.classList.contains("active") ? 1.06 : 1;
-            chip.addEventListener("mouseenter", () => springTo(chip, { scale: restScale() + 0.04 }));
+            const restScale = () => chip.classList.contains("active") ? 1.05 : 1;
+            springTo(chip, { scale: restScale() });
+            chip.addEventListener("mouseenter", () => springTo(chip, { scale: restScale() + 0.05 }));
             chip.addEventListener("mouseleave", () => springTo(chip, { scale: restScale() }));
         }
     });
 }
 
-// Recomputes everything language-related — replaces three separate calls at each call site.
+// Recomputes everything language-related — one call instead of four.
 function renderLangSections(repos){
     const breakdown = getLangBreakdown(repos);
+    renderHeroStats(repos, breakdown);
     renderStatsBar(repos, breakdown);
     renderLangBar(breakdown);
     renderLangChips(repos, breakdown);
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   FETCH
+   ═══════════════════════════════════════════════════════════════════ */
 
 // Refresh button state
 function setButtonState(state){
@@ -741,32 +985,31 @@ function setButtonState(state){
     }
 }
 
-// Small top-of-page toast for transient messages the button state alone
-// doesn't explain (e.g. "the worker throttled this pull"). Reuses one
-// element instead of stacking multiples — a second call just restarts
-// the timer with the new message.
+// Small toast for transient messages the button state alone doesn't explain
+// (e.g. "the worker throttled this pull"). Reuses one element instead of
+// stacking multiples — a second call just restarts the timer.
 let toastTimer;
 function showToast(message, tone = "warn", duration = 3000){
-    const toast = document.getElementById("toast");
+    const toast = $("toast");
     if(!toast) return;
 
     clearTimeout(toastTimer);
     toast.textContent = message;
-    toast.className = `toast toast-${tone} visible`;
+    toast.className = `toast toast-${tone}`;
     toast.hidden = false;
+
+    requestAnimationFrame(() => toast.classList.add("visible"));
 
     toastTimer = setTimeout(() => {
         toast.classList.remove("visible");
-        setTimeout(() => { toast.hidden = true; }, 200); // let the fade-out transition finish first
+        setTimeout(() => { toast.hidden = true; }, 280); // let the fade-out finish
     }, duration);
 }
 
-// Every click hits the network for real — the worker enforces the actual
-// rate limit. If we already have cached cards on screen, a pull never
-// dims or blanks the grid — it's a quiet background fetch that swaps in
-// whatever changed once it lands; the button is the only loading signal.
-// The only exception is a genuine first load with no cache at all, which
-// still shows skeletons since there's nothing to look at yet.
+// Every click hits the network for real — the worker enforces the actual rate
+// limit. If we already have cached cards on screen, a pull never dims or blanks
+// the grid; it's a quiet background fetch that swaps in whatever changed. The
+// only exception is a genuine first load with no cache, which shows skeletons.
 async function fetchRepos(){
 
     const hasCache = allRepos.length > 0;
@@ -798,14 +1041,14 @@ async function fetchRepos(){
         }
 
         if(response.status === 304){
-            // Server confirmed nothing changed since our last pull — same
-            // data we already have on screen, so there's nothing to
-            // re-parse or re-render. Just note the check happened.
+            // Server confirmed nothing changed since our last pull — same data
+            // we already have on screen, so there's nothing to re-render.
             if(cacheObj){
                 cacheObj.time = Date.now();
                 localStorage.setItem(CACHE_KEY, JSON.stringify(cacheObj));
             }
-            status.textContent = `last synced ${new Date().toLocaleString()} · unchanged`;
+            statusEl.textContent = `last synced ${new Date().toLocaleString()} · unchanged`;
+            setSubtitle(`${allRepos.length} public repositories · up to date`);
             setButtonState("success");
             return;
         }
@@ -840,11 +1083,9 @@ async function fetchRepos(){
             })
         );
 
-        subtitle.textContent =
-            `${repos.length} public repositories · live`;
+        setSubtitle(`${repos.length} public repositories · live`);
 
-        status.textContent =
-            `last synced ${new Date().toLocaleString()}`;
+        statusEl.textContent = `last synced ${new Date().toLocaleString()}`;
 
         setButtonState("success");
 
@@ -853,9 +1094,9 @@ async function fetchRepos(){
 
         console.error(err);
 
-        // Only wipe the grid on a hard failure with nothing cached to fall
-        // back on — if cached cards are already showing, leave them up and
-        // just report the failure quietly instead of yanking working content.
+        // Only wipe the grid on a hard failure with nothing cached to fall back
+        // on — if cached cards are already showing, leave them up and report
+        // the failure quietly instead of yanking working content.
         if(!hasCache){
             grid.innerHTML = `
                 <div class="card notice">
@@ -863,12 +1104,12 @@ async function fetchRepos(){
                     <span>${escapeHtml(err.message)}</span>
                 </div>
             `;
-            subtitle.textContent = "fatal: repo fetch failed";
+            setSubtitle("fatal: repo fetch failed");
         } else {
             showToast("pull failed — showing cached data", "error");
         }
 
-        status.textContent = err.message;
+        statusEl.textContent = err.message;
         setButtonState("error");
         return;
     }
@@ -876,167 +1117,219 @@ async function fetchRepos(){
 
 // Skeleton placeholders (shown while loading with no existing data yet)
 function renderSkeleton(count = 6){
-    grid.innerHTML = Array.from({ length: count }).map(() => `
-        <div class="skeleton">
-            <div class="skel-line" style="width:55%;height:14px;"></div>
-            <div class="skel-line" style="width:90%;"></div>
-            <div class="skel-line" style="width:70%;"></div>
-            <div class="skel-line" style="width:40%;margin-top:auto;"></div>
+    grid.innerHTML = Array.from({ length: count }).map((_, i) => `
+        <div class="skeleton" style="--card-delay:${i * 70}ms">
+            <div class="skel-line" style="width:52%;height:14px;"></div>
+            <div class="skel-thumb"></div>
+            <div class="skel-line" style="width:92%;"></div>
+            <div class="skel-line" style="width:68%;"></div>
+            <div class="skel-line" style="width:38%;margin-top:auto;"></div>
         </div>
     `).join("");
 }
 
-// Render
-function render(repos, query = ""){
+/* ═══════════════════════════════════════════════════════════════════
+   RENDER
+   ═══════════════════════════════════════════════════════════════════ */
 
-    if(repos.length === 0){
-        grid.innerHTML = query
-            ? `<div class="empty">no matches for “${escapeHtml(query)}”</div>`
-            : `<div class="empty">no repositories to show</div>`;
-        return;
-    }
+function cardMarkup(repo, query){
+    const topics = repo.topics || [];
+    const featured = topics.includes("featured");
+    const tags = topics.filter(t => t !== "featured");
+    if(tags.length === 0 && repo.language) tags.push(repo.language);
 
-    grid.innerHTML = repos.map((repo, i) => {
+    // Two-stage image fallback: try the site's own OG image first (if the
+    // worker resolved one). If THAT specific image fails to load — site
+    // redesigned, image moved, whatever — retry once with GitHub's own repo
+    // preview image before falling back to endless retries.
+    const fallbackSrc = `https://opengraph.githubassets.com/1/${USERNAME}/${repo.name}`;
+    const initialSrc = repo.ogImage || fallbackSrc;
 
-        const topics = repo.topics || [];
-        const featured = topics.includes("featured");
-        const tags = topics.filter(t => t !== "featured");
-        if(tags.length === 0 && repo.language) tags.push(repo.language);
+    return `
+    <article class="card ${featured ? "card-featured" : ""}" data-key="${escapeHtml(repo.name)}">
 
-        // Two-stage image fallback: try the site's own OG image first (if the
-        // worker resolved one). If THAT specific image fails to load — site
-        // redesigned, image moved, whatever — retry once with GitHub's own
-        // repo preview image before giving up and removing the block.
-        const fallbackSrc = `https://opengraph.githubassets.com/1/${USERNAME}/${repo.name}`;
-        const initialSrc = repo.ogImage || fallbackSrc;
+        <div class="card-header">
+            <div class="name-row">
+                <span class="branch-icon">⌥</span>
+                <a class="name" href="${repo.html_url}" target="_blank" rel="noopener">
+                    ${highlightMatch(repo.name, query)}
+                </a>
+            </div>
+            ${featured ? `<span class="featured-badge">★ Featured</span>` : ""}
+        </div>
 
-        return `
-        <div class="card ${featured ? "card-featured" : ""}" style="--card-delay:${Math.min(i, 10) * 30}ms">
+        <div class="card-divider"></div>
 
-            <div class="card-header">
-                <div class="name-row">
-                    <span class="branch-icon">⌥</span>
-                    <a
-                        class="name"
-                        href="${repo.html_url}"
-                        target="_blank"
-                        rel="noopener"
-                    >
-                        ${highlightMatch(repo.name, query)}
-                    </a>
+        <div class="card-preview">
+            <img class="card-thumb" src="${initialSrc}" data-fallback="${fallbackSrc}" alt="" loading="lazy">
+        </div>
+
+        <div class="desc">
+            ${repo.description ? escapeHtml(repo.description) : "No description."}
+        </div>
+
+        ${
+            tags.length
+                ? `
+                <div class="tech-tags">
+                    ${tags.map(tag => {
+                        const dotColor = langColor(tag, null);
+                        return `
+                        <span class="tech-tag">
+                            ${dotColor ? `<span class="lang-dot" style="background:${dotColor};color:${dotColor}"></span>` : ""}
+                            ${escapeHtml(tag)}
+                        </span>
+                        `;
+                    }).join("")}
                 </div>
-                ${featured ? `<span class="featured-badge">Featured</span>` : ""}
-            </div>
+                `
+                : ""
+        }
 
-            <div class="card-divider"></div>
-
-            <div class="card-preview">
-                <img
-                    class="card-thumb"
-                    src="${initialSrc}"
-                    data-fallback="${fallbackSrc}"
-                    alt=""
-                    loading="lazy"
-                >
-            </div>
-
-            <div class="card-divider"></div>
-
-            <div class="desc">
-                ${repo.description
-                    ? escapeHtml(repo.description)
-                    : "No description."}
-            </div>
-
+        <div class="card-actions">
             ${
-                tags.length
+                repo.homepage
                     ? `
-                    <div class="tech-tags">
-                        ${tags.map(tag => {
-                            const dotColor = langColor(tag, null);
-                            return `
-                            <span class="tech-tag">
-                                ${dotColor ? `<span class="lang-dot" style="background:${dotColor}"></span>` : ""}
-                                ${escapeHtml(tag)}
-                            </span>
-                            `;
-                        }).join("")}
-                    </div>
+                    <a class="visit-site-btn" href="${repo.homepage}" target="_blank" rel="noopener">
+                        <span class="arrow">↗</span> Visit Site
+                    </a>
                     `
                     : ""
             }
-
-            <div class="card-actions">
-                ${
-                    repo.homepage
-                        ? `
-                        <a class="visit-site-btn" href="${repo.homepage}" target="_blank" rel="noopener">
-                            <span class="arrow">↗</span> Visit Site
-                        </a>
-                        `
-                        : ""
-                }
-                <a class="github-link" href="${repo.html_url}" target="_blank" rel="noopener">Github</a>
-            </div>
-
-            <div class="meta">
-                ${repo.stargazers_count > 0 ? `<span>★ ${repo.stargazers_count}</span>` : ""}
-                <span>updated ${timeAgo(repo.pushed_at)}</span>
-                <span class="meta-created">created on: ${new Date(repo.created_at).toLocaleDateString()}</span>
-            </div>
-
+            <a class="github-link" href="${repo.html_url}" target="_blank" rel="noopener">Github</a>
         </div>
-    `}).join("");
 
-    // Cards get a lift (CSS handles border-color/shadow already; Motion
-    // takes over the transform for the springy part). Action buttons inside
-    // get a plain scale bounce.
-    if(motionAnimate && !prefersReducedMotion){
-        grid.querySelectorAll(".card").forEach(card => {
-            card.addEventListener("mouseenter", () => springTo(card, { y: -6, scale: 1.015 }));
-            card.addEventListener("mouseleave", () => springTo(card, { y: 0, scale: 1 }));
-        });
+        <div class="meta">
+            ${repo.stargazers_count > 0 ? `<span class="star">★ ${repo.stargazers_count}</span>` : ""}
+            <span>updated ${timeAgo(repo.pushed_at)}</span>
+            <span class="meta-created">created on: ${new Date(repo.created_at).toLocaleDateString()}</span>
+        </div>
 
-        addHoverScale(grid.querySelectorAll(".visit-site-btn, .github-link, .name"), 1.06);
+    </article>
+`;
+}
+
+// Keeps thumbnails alive: try the site's own OG image, fall back once to
+// GitHub's, and if that ALSO fails keep retrying with capped exponential
+// backoff (up to once/60s) rather than giving up. The card shows a subtle
+// pulsing placeholder while it waits — never a broken-image icon.
+function wireThumbnail(img){
+    const fallback = img.dataset.fallback;
+    let usedFallback = false;
+    let attempt = 0;
+
+    function scheduleRetry(){
+        attempt++;
+        const delay = Math.min(2000 * Math.pow(1.6, attempt), 60000);
+        setTimeout(() => {
+            const base = img.src.split("?")[0];
+            img.src = `${base}?retry=${Date.now()}`;
+        }, delay);
     }
 
-    // Thumbnail load failures: try the site's own OG image, fall back once
-    // to GitHub's, and if that ALSO fails, keep retrying indefinitely with
-    // capped exponential backoff (2s, 3s, 5s, 8s... up to once/60s) rather
-    // than giving up. The card just shows a subtle pulsing placeholder
-    // while it waits — never a broken-image icon, never permanently gone.
-    grid.querySelectorAll(".card-thumb").forEach(img => {
-        const fallback = img.dataset.fallback;
-        let usedFallback = false;
-        let attempt = 0;
-
-        function scheduleRetry(){
-            attempt++;
-            const delay = Math.min(2000 * Math.pow(1.6, attempt), 60000);
-            setTimeout(() => {
-                const base = img.src.split("?")[0];
-                img.src = `${base}?retry=${Date.now()}`;
-            }, delay);
-        }
-
-        img.addEventListener("error", () => {
-            if(!usedFallback && fallback && img.src.split("?")[0] !== fallback){
-                usedFallback = true;
-                attempt = 0;
-                img.src = fallback;
-                return;
-            }
-            img.closest(".card-preview")?.classList.add("thumb-retrying");
-            scheduleRetry();
-        });
-
-        img.addEventListener("load", () => {
+    img.addEventListener("error", () => {
+        if(!usedFallback && fallback && img.src.split("?")[0] !== fallback){
+            usedFallback = true;
             attempt = 0;
-            img.closest(".card-preview")?.classList.remove("thumb-retrying");
-        });
+            img.src = fallback;
+            return;
+        }
+        img.closest(".card-preview")?.classList.add("thumb-retrying");
+        scheduleRetry();
     });
 
+    img.addEventListener("load", () => {
+        attempt = 0;
+        img.closest(".card-preview")?.classList.remove("thumb-retrying");
+    });
 }
+
+function render(repos, query = ""){
+
+    // Where each surviving card sits *before* the re-render, so a sort or
+    // filter change can slide cards to their new slots (FLIP) instead of
+    // snapping the whole grid.
+    const oldRects = new Map();
+    if(richMotion){
+        grid.querySelectorAll(".card[data-key]").forEach(card => {
+            oldRects.set(card.dataset.key, card.getBoundingClientRect());
+        });
+    }
+
+    if(repos.length === 0){
+        grid.innerHTML = query
+            ? `<div class="empty"><span class="empty-glyph">∅</span>no matches for “${escapeHtml(query)}”</div>`
+            : `<div class="empty"><span class="empty-glyph">∅</span>no repositories to show</div>`;
+        updateResultCount(0, query);
+        return;
+    }
+
+    grid.innerHTML = repos.map(repo => cardMarkup(repo, query)).join("");
+    updateResultCount(repos.length, query);
+
+    const cards = [...grid.querySelectorAll(".card[data-key]")];
+
+    // One measurement pass before any class changes, so reading layout here
+    // doesn't interleave with the writes below.
+    const newRects = richMotion
+        ? cards.map(card => card.getBoundingClientRect())
+        : [];
+
+    cards.forEach((card, i) => {
+        attachCardPointer(card);
+
+        const prev = oldRects.get(card.dataset.key);
+
+        if(prev && richMotion){
+            // Card survived the re-render: show it immediately (no entrance
+            // transition) and slide it from where it used to be.
+            card.style.transition = "none";
+            card.classList.add("card-in");
+
+            const next = newRects[i];
+            const dx = prev.left - next.left;
+            const dy = prev.top - next.top;
+
+            if(Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5){
+                card.animate(
+                    [
+                        { transform: `translate(${dx}px, ${dy}px)` },
+                        { transform: "translate(0, 0)" }
+                    ],
+                    { duration: 480, easing: "cubic-bezier(.16,1,.3,1)" }
+                );
+            }
+
+            requestAnimationFrame(() => { card.style.transition = ""; });
+        } else {
+            // New to the grid — fade up once it scrolls into view.
+            observeCard(card);
+        }
+    });
+
+    if(motionAnimate && !prefersReducedMotion){
+        addHoverScale(grid.querySelectorAll(".visit-site-btn, .github-link"), 1.05);
+    }
+
+    grid.querySelectorAll(".card-thumb").forEach(wireThumbnail);
+}
+
+function updateResultCount(shown, query){
+    if(!resultCount) return;
+
+    const total = allRepos.length;
+    const filtered = shown !== total || query || activeLanguage;
+
+    resultCount.textContent = total === 0
+        ? ""
+        : filtered
+            ? `showing ${shown} of ${total}`
+            : `${total} repositories`;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   TEXT HELPERS
+   ═══════════════════════════════════════════════════════════════════ */
 
 // Escape HTML
 function escapeHtml(str){
@@ -1086,13 +1379,15 @@ function timeAgo(dateStr){
     return `${years} year${years === 1 ? "" : "s"} ago`;
 }
 
-// Filter
-const filterInput = document.getElementById("filter");
-const filterClear = document.getElementById("filter-clear");
+/* ═══════════════════════════════════════════════════════════════════
+   FILTER + SORT
+   ═══════════════════════════════════════════════════════════════════ */
+
+const filterInput = $("filter");
+const filterClear = $("filter-clear");
 
 let filterDebounce;
 
-// Sort + filter pipeline
 function getVisibleRepos(){
     let repos = [...allRepos];
 
@@ -1129,19 +1424,21 @@ function applyFilter(){
     if(q === "sudo"){
         grid.innerHTML = `
             <div class="empty">
+                <span class="empty-glyph">⛔</span>
                 Permission denied
                 <span style="font-size:.72rem;opacity:.55;">
                     (dipdagod is not in the sudoers file. this incident will be reported.)
                 </span>
             </div>
         `;
+        updateResultCount(0, raw);
         return;
     }
 
     render(getVisibleRepos(), raw);
 }
 
-// Sort dropdown (custom) — open/close, selection, click-outside, keyboard nav
+// Sort dropdown (custom — a native <select> can't be styled while open)
 const sortToggleLabel = sortToggle.querySelector(".sort-toggle-label");
 const sortOptions = Array.from(sortMenu.querySelectorAll(".sort-option"));
 
@@ -1206,8 +1503,6 @@ sortMenu.addEventListener("keydown", e => {
     }
 });
 
-addHoverScale([sortToggle], 1.03);
-
 filterInput.addEventListener("input", () => {
     clearTimeout(filterDebounce);
     filterDebounce = setTimeout(applyFilter, 120);
@@ -1232,6 +1527,15 @@ document.addEventListener("keydown", e => {
         setHelpVisible(helpPanel.hidden);
     }
 
+    if((e.key === "r" || e.key === "R") && !isTyping && !e.metaKey && !e.ctrlKey){
+        if(!refreshBtn.disabled) fetchRepos();
+    }
+
+    if((e.key === "g" || e.key === "G") && !isTyping){
+        document.getElementById("projects")
+            ?.scrollIntoView({ behavior: prefersReducedMotion ? "auto" : "smooth", block: "start" });
+    }
+
     if(e.key === "Escape"){
         if(!helpPanel.hidden){
             setHelpVisible(false);
@@ -1251,9 +1555,17 @@ refreshBtn.addEventListener("click", () => {
     fetchRepos();
 });
 
-// Paints cached data instantly. Fresh (<24h) cache = no network call. No cache, or stale cache, triggers an automatic fetch — nothing is ever left blank.
+/* ═══════════════════════════════════════════════════════════════════
+   BOOT
+   ═══════════════════════════════════════════════════════════════════ */
+
+// Paints cached data instantly. Fresh (<24h) cache = no network call. No cache,
+// or a stale one, triggers an automatic fetch — nothing is ever left blank.
 (function loadFromCache(){
-    const cache = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
+    const cache = (() => {
+        try { return JSON.parse(localStorage.getItem(CACHE_KEY) || "null"); }
+        catch { return null; }
+    })();
     const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
     if(cache && cache.data && cache.data.length){
@@ -1261,18 +1573,15 @@ refreshBtn.addEventListener("click", () => {
         renderLangSections(allRepos);
         applyFilter();
 
-        subtitle.textContent =
-            `${allRepos.length} public repositories · cached`;
-
-        status.textContent =
-            `last synced ${new Date(cache.time).toLocaleString()}`;
+        subtitle.textContent = `${allRepos.length} public repositories · cached`;
+        statusEl.textContent = `last synced ${new Date(cache.time).toLocaleString()}`;
 
         if(Date.now() - cache.time > ONE_DAY_MS){
-            fetchRepos(); // stale — refresh automatically instead of waiting for a manual pull
+            fetchRepos(); // stale — refresh instead of waiting for a manual pull
         }
     } else {
         subtitle.textContent = "no cache — pulling fresh...";
-        status.textContent = "first load, fetching repositories";
-        fetchRepos(); // no cache at all — pull automatically instead of waiting for a manual click
+        statusEl.textContent = "first load, fetching repositories";
+        fetchRepos(); // nothing cached — pull automatically
     }
 })();

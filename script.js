@@ -587,6 +587,14 @@ function langColor(lang, fallback = "#8b949e"){
     return LANG_COLORS_LC[String(lang).toLowerCase()] ?? fallback;
 }
 
+// "#rrggbb" -> "r,g,b", so CSS can build rgba(var(--accent-rgb), alpha).
+function hexToRgb(hex){
+    const n = parseInt(hex.replace("#", ""), 16);
+    return `${(n >> 16) & 255},${(n >> 8) & 255},${n & 255}`;
+}
+
+const NO_LANGUAGE_ACCENT = "#3d4552";
+
 // Single source of truth for per-language counts — stats bar, language bar, and filter chips all read from this instead of each looping repos themselves.
 function getLangBreakdown(repos){
     const counts = {};
@@ -903,6 +911,13 @@ function render(repos, query = ""){
         const tags = topics.filter(t => t !== "featured");
         if(tags.length === 0 && repo.language) tags.push(repo.language);
 
+        // Every card gets an identity color: its primary language, or a
+        // neutral slate when GitHub reports none. Drives the tab dot, the
+        // left rail, the background tint, and the hover glow — so cards
+        // read as distinct entries instead of identical boxes.
+        const accent = repo.language ? langColor(repo.language) : NO_LANGUAGE_ACCENT;
+        const accentRgb = hexToRgb(accent);
+
         // Two-stage image fallback: try the site's own OG image first (if the
         // worker resolved one). If THAT specific image fails to load — site
         // redesigned, image moved, whatever — retry once with GitHub's own
@@ -911,9 +926,27 @@ function render(repos, query = ""){
         const initialSrc = repo.ogImage || fallbackSrc;
 
         return `
-        <div class="card ${featured ? "card-featured" : ""}" style="--card-delay:${Math.min(i, 10) * 30}ms">
+        <div class="card ${featured ? "card-featured" : ""}" style="--card-delay:${Math.min(i, 10) * 30}ms; --accent:${accent}; --accent-rgb:${accentRgb}">
 
-            <div class="card-header">
+            <div class="card-tab">
+                <span class="tab-dot" style="background:${accent}"></span>
+                <span class="tab-path">~/${USERNAME}/${escapeHtml(repo.name)}</span>
+                ${featured ? `<span class="tab-featured">★ featured</span>` : ""}
+            </div>
+
+            <div class="card-content">
+
+                <div class="card-preview">
+                    <img
+                        class="card-thumb"
+                        src="${initialSrc}"
+                        data-fallback="${fallbackSrc}"
+                        alt=""
+                        loading="lazy"
+                    >
+                    ${repo.homepage ? `<span class="live-pill"><span class="live-dot"></span>live</span>` : ""}
+                </div>
+
                 <div class="name-row">
                     <span class="branch-icon">⌥</span>
                     <a
@@ -925,64 +958,52 @@ function render(repos, query = ""){
                         ${highlightMatch(repo.name, query)}
                     </a>
                 </div>
-                ${featured ? `<span class="featured-badge">Featured</span>` : ""}
-            </div>
 
-            <div class="card-divider"></div>
+                <div class="desc">
+                    <span class="desc-marker">#</span>
+                    ${repo.description
+                        ? escapeHtml(repo.description)
+                        : "No description."}
+                </div>
 
-            <div class="card-preview">
-                <img
-                    class="card-thumb"
-                    src="${initialSrc}"
-                    data-fallback="${fallbackSrc}"
-                    alt=""
-                    loading="lazy"
-                >
-            </div>
-
-            <div class="card-divider"></div>
-
-            <div class="desc">
-                ${repo.description
-                    ? escapeHtml(repo.description)
-                    : "No description."}
-            </div>
-
-            ${
-                tags.length
-                    ? `
-                    <div class="tech-tags">
-                        ${tags.map(tag => {
-                            const dotColor = langColor(tag, null);
-                            return `
-                            <span class="tech-tag">
-                                ${dotColor ? `<span class="lang-dot" style="background:${dotColor}"></span>` : ""}
-                                ${escapeHtml(tag)}
-                            </span>
-                            `;
-                        }).join("")}
-                    </div>
-                    `
-                    : ""
-            }
-
-            <div class="card-actions">
                 ${
-                    repo.homepage
+                    tags.length
                         ? `
-                        <a class="visit-site-btn" href="${repo.homepage}" target="_blank" rel="noopener">
-                            <span class="arrow">↗</span> Visit Site
-                        </a>
+                        <div class="tech-tags">
+                            ${tags.map(tag => {
+                                const dotColor = langColor(tag, null);
+                                const tint = dotColor ? hexToRgb(dotColor) : null;
+                                return `
+                                <span class="tech-tag" ${tint ? `style="background:rgba(${tint},.12);border-color:rgba(${tint},.35)"` : ""}>
+                                    ${dotColor ? `<span class="lang-dot" style="background:${dotColor}"></span>` : ""}
+                                    ${escapeHtml(tag)}
+                                </span>
+                                `;
+                            }).join("")}
+                        </div>
                         `
                         : ""
                 }
-                <a class="github-link" href="${repo.html_url}" target="_blank" rel="noopener">Github</a>
-            </div>
 
-            <div class="meta">
-                ${repo.stargazers_count > 0 ? `<span>★ ${repo.stargazers_count}</span>` : ""}
-                <span>updated ${timeAgo(repo.pushed_at)}</span>
-                <span class="meta-created">created on: ${new Date(repo.created_at).toLocaleDateString()}</span>
+                <div class="card-actions">
+                    ${
+                        repo.homepage
+                            ? `
+                            <a class="visit-site-btn" href="${repo.homepage}" target="_blank" rel="noopener">
+                                <span class="arrow">↗</span> Visit Site
+                            </a>
+                            `
+                            : ""
+                    }
+                    <a class="github-link" href="${repo.html_url}" target="_blank" rel="noopener">Github</a>
+                </div>
+
+                <div class="meta">
+                    ${repo.stargazers_count > 0 ? `<span>★ ${repo.stargazers_count}</span>` : ""}
+                    <span>updated ${timeAgo(repo.pushed_at)}</span>
+                    <span class="meta-created">created on: ${new Date(repo.created_at).toLocaleDateString()}</span>
+                </div>
+
             </div>
 
         </div>

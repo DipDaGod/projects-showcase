@@ -55,6 +55,52 @@ function addHoverScale(els, hoverScale = 1.06){
     });
 }
 
+// Cursor-reactive 3D tilt for project cards: the card leans toward the
+// pointer (rotateX/rotateY via spring, not a snap), its thumbnail drifts
+// slightly opposite for a subtle parallax depth cue, and a CSS custom
+// property drives the light-sweep highlight defined in .card-shine.
+// rAF-batched per card so rapid mousemove doesn't queue redundant springs.
+function addTiltEffect(cards){
+    cards.forEach(card => {
+        const thumb = card.querySelector(".card-thumb");
+        let px = 0.5, py = 0.5, queued = false;
+
+        function apply(){
+            const rotateY = (px - 0.5) * 14;
+            const rotateX = (0.5 - py) * 14;
+
+            springTo(card, { rotateX, rotateY, scale: 1.025, y: -8 }, { stiffness: 220, damping: 22, mass: 0.4 });
+            card.style.setProperty("--spot-x", `${px * 100}%`);
+            card.style.setProperty("--spot-y", `${py * 100}%`);
+
+            if(thumb) springTo(thumb, { x: (px - 0.5) * -12, y: (py - 0.5) * -8 }, { stiffness: 200, damping: 24 });
+
+            queued = false;
+        }
+
+        function onMove(e){
+            const rect = card.getBoundingClientRect();
+            px = (e.clientX - rect.left) / rect.width;
+            py = (e.clientY - rect.top) / rect.height;
+
+            if(!queued){
+                queued = true;
+                requestAnimationFrame(apply);
+            }
+        }
+
+        function reset(){
+            springTo(card, { rotateX: 0, rotateY: 0, scale: 1, y: 0 });
+            if(thumb) springTo(thumb, { x: 0, y: 0 });
+            card.style.setProperty("--spot-opacity", "0");
+        }
+
+        card.addEventListener("mouseenter", () => card.style.setProperty("--spot-opacity", "1"));
+        card.addEventListener("mousemove", onMove);
+        card.addEventListener("mouseleave", reset);
+    });
+}
+
 // Delays fn until ms have passed since the last call — avoids firing on every resize event.
 function debounce(fn, ms = 150){
     let timer;
@@ -918,6 +964,11 @@ function render(repos, query = ""){
         const accent = repo.language ? langColor(repo.language) : NO_LANGUAGE_ACCENT;
         const accentRgb = hexToRgb(accent);
 
+        // A live-deployed project (or one explicitly tagged "featured") earns
+        // a wider bento tile instead of the same box as everything else —
+        // ties visual weight to something meaningful rather than random.
+        const wide = featured || !!repo.homepage;
+
         // Two-stage image fallback: try the site's own OG image first (if the
         // worker resolved one). If THAT specific image fails to load — site
         // redesigned, image moved, whatever — retry once with GitHub's own
@@ -926,12 +977,15 @@ function render(repos, query = ""){
         const initialSrc = repo.ogImage || fallbackSrc;
 
         return `
-        <div class="card ${featured ? "card-featured" : ""}" style="--card-delay:${Math.min(i, 10) * 30}ms; --accent:${accent}; --accent-rgb:${accentRgb}">
+        <div class="card ${featured ? "card-featured" : ""} ${wide ? "card-wide" : ""}" style="--card-delay:${Math.min(i, 10) * 30}ms; --accent:${accent}; --accent-rgb:${accentRgb}">
+
+            <div class="card-shine" aria-hidden="true"></div>
 
             <div class="card-tab">
                 <span class="tab-dot" style="background:${accent}"></span>
                 <span class="tab-path">~/${USERNAME}/${escapeHtml(repo.name)}</span>
                 ${featured ? `<span class="tab-featured">★ featured</span>` : ""}
+                <span class="tab-cursor" aria-hidden="true">▮</span>
             </div>
 
             <div class="card-content">
@@ -1009,15 +1063,12 @@ function render(repos, query = ""){
         </div>
     `}).join("");
 
-    // Cards get a lift (CSS handles border-color/shadow already; Motion
-    // takes over the transform for the springy part). Action buttons inside
-    // get a plain scale bounce.
-    if(motionAnimate && !prefersReducedMotion){
-        grid.querySelectorAll(".card").forEach(card => {
-            card.addEventListener("mouseenter", () => springTo(card, { y: -6, scale: 1.015 }));
-            card.addEventListener("mouseleave", () => springTo(card, { y: 0, scale: 1 }));
-        });
-
+    // Cards get a cursor-reactive 3D tilt + light sweep (CSS handles
+    // border-color/shadow already; Motion takes over the transform for the
+    // springy part). Skipped on touch devices — tilt-to-cursor is meaningless
+    // without a hovering pointer. Action buttons inside get a plain scale bounce.
+    if(motionAnimate && !prefersReducedMotion && !isTouchDevice){
+        addTiltEffect(grid.querySelectorAll(".card"));
         addHoverScale(grid.querySelectorAll(".visit-site-btn, .github-link, .name"), 1.06);
     }
 
